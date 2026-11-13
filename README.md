@@ -137,14 +137,11 @@ powershell -ExecutionPolicy Bypass -File tools\new-writeup.ps1 `
 
 全站搜索替换 `zhshy-chi` 就能把链接都换掉（记得保留 `https://github.com/你的名字/你的名字.github.io`）。
 
-### 删掉示例文章
+### 删除一篇文章
 
-现在有 4 篇示例文章（Web / Pwn / Crypto / Misc），正文顶部都有「这是一篇示例文章」的提示。
-换成自己的内容时：
+删除 `writeups/xxx.html`，再从 `assets/js/writeups.js` 里删掉对应条目，最后删掉 `sitemap.xml` 里的那条 `<url>`（可选）。三处都删干净，列表和统计才会同步。
 
-1. 删掉提示段落。
-2. 替换标题、日期、正文。
-3. 如果整篇不要了：删除 `writeups/xxx.html`，再从 `assets/js/writeups.js` 里删掉对应条目，最后删掉 `sitemap.xml` 里的那条 `<url>`。
+> 目前站里一篇文章都没有，`window.WRITEUPS` 是空数组，首页显示的是「还没有发布 writeup」的占位卡片。
 
 ---
 

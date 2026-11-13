@@ -132,38 +132,55 @@
 
     var latest = $("#latest-grid");
     if (latest) {
-      latest.innerHTML = DATA.slice(0, 4)
-        .map(function (p) {
-          return (
-            '<article class="card">' +
-              '<div class="card-top">' + badge(p.category) +
-                "<time datetime=\"" + esc(p.date) + "\">" + esc(p.date) + "</time>" +
-              "</div>" +
-              "<h3><a href=\"" + esc(p.file) + "\">" + esc(p.title) + "</a></h3>" +
-              "<p>" + esc(p.excerpt) + "</p>" +
-              '<div class="card-foot">' + tagList(p.tags) + "</div>" +
-            "</article>"
-          );
-        })
-        .join("");
+      if (DATA.length === 0) {
+        latest.innerHTML =
+          '<div class="empty-card">' +
+            "<h3>还没有发布 writeup</h3>" +
+            '<p class="muted">复制 <code>writeups/_template.html</code> 写成第一篇，' +
+            "再到 <code>assets/js/writeups.js</code> 里登记一条，它就会出现在这里。</p>" +
+          "</div>";
+      } else {
+        latest.innerHTML = DATA.slice(0, 4)
+          .map(function (p) {
+            return (
+              '<article class="card">' +
+                '<div class="card-top">' + badge(p.category) +
+                  "<time datetime=\"" + esc(p.date) + "\">" + esc(p.date) + "</time>" +
+                "</div>" +
+                "<h3><a href=\"" + esc(p.file) + "\">" + esc(p.title) + "</a></h3>" +
+                "<p>" + esc(p.excerpt) + "</p>" +
+                '<div class="card-foot">' + tagList(p.tags) + "</div>" +
+              "</article>"
+            );
+          })
+          .join("");
+      }
     }
 
     var catGrid = $("#category-grid");
     if (catGrid) {
-      catGrid.innerHTML = CATEGORIES.filter(function (c) {
+      var used = CATEGORIES.filter(function (c) {
         return (stats.cats[c.key] || 0) > 0;
-      })
-        .map(function (c) {
-          var count = stats.cats[c.key] || 0;
-          return (
-            '<a class="cat-card" href="writeups.html?cat=' + encodeURIComponent(c.key) + '">' +
-              '<span class="cat-name">' + esc(c.key) + "</span>" +
-              '<span class="cat-desc">' + esc(c.desc) + "</span>" +
-              '<span class="cat-count">' + count + " 篇</span>" +
-            "</a>"
-          );
-        })
-        .join("");
+      });
+
+      if (used.length === 0) {
+        // 一篇文章都没有时，整块「按方向浏览」没有意义，直接隐藏
+        var section = catGrid.closest ? catGrid.closest("section") : null;
+        if (section) section.hidden = true;
+      } else {
+        catGrid.innerHTML = used
+          .map(function (c) {
+            var count = stats.cats[c.key] || 0;
+            return (
+              '<a class="cat-card" href="writeups.html?cat=' + encodeURIComponent(c.key) + '">' +
+                '<span class="cat-name">' + esc(c.key) + "</span>" +
+                '<span class="cat-desc">' + esc(c.desc) + "</span>" +
+                '<span class="cat-count">' + count + " 篇</span>" +
+              "</a>"
+            );
+          })
+          .join("");
+      }
     }
   }
 
@@ -257,7 +274,15 @@
         countEl.textContent =
           "共 " + rows.length + " 篇 · " + label + (state.q ? " · 搜索：" + state.q : "");
       }
-      if (empty) empty.hidden = rows.length !== 0;
+      if (empty) {
+        empty.hidden = rows.length !== 0;
+        if (DATA.length === 0) {
+          empty.textContent =
+            "站里还没有 writeup。复制 writeups/_template.html 写第一篇，再到 assets/js/writeups.js 登记一条即可。";
+        } else {
+          empty.textContent = "没有匹配的 writeup，换个关键词试试。";
+        }
+      }
       if (reset) reset.hidden = state.cat === "全部" && !state.q;
     }
 
