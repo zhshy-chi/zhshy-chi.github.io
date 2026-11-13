@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku 计算器：maxlength 挡不住任何人 · zhshy</title>
+<meta name="description" content="输入框死活只能打一位数，不是题难，是 maxlength 在拦你。一次改 DOM 属性就过的前端校验练习。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 计算器：maxlength 挡不住任何人">
+<meta property="og:description" content="输入框死活只能打一位数，不是题难，是 maxlength 在拦你。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-jisuanqi.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-jisuanqi">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">前端校验</span>
+      <span class="tag">F12</span>
+    </div>
+    <h1>Bugku 计算器：maxlength 挡不住任何人</h1>
+    <p class="article-meta">
+      <time datetime="2026-09-22">2026-09-22</time>
+      <span class="dot-sep">·</span>
+      <span>约 6 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku 练习场</span>
+    </p>
+    <p class="article-lead">
+      让输入一个加法结果，但输入框死活只能打一位数。这不是题目难，是前端在拦你。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku 练习场</td></tr>
+          <tr><th>类型</th><td>Web · 前端</td></tr>
+          <tr><th>知识点</th><td>maxlength 属性、修改 DOM、客户端校验不可信</td></tr>
+        </tbody>
+      </table>
+      <p>这题在 Bugku 里叫「计算器」，是很多人做 Web 的第一道题。知识点不深，但它第一次把「前端」和「后端」的边界摆到了你面前。</p>
+
+      <h2>现象：输入框只吃一位数</h2>
+      <p>题目给两个数相加，答案是个三位数。我第一次输入时只打进去一位，后面再按键盘就没反应了，输入框像被焊住一样。删掉重打，还是一样。页面不报错，也不提示「最多一位」，它就是安安静静地不接收。</p>
+      <p>这种「没有报错但就是不让你输入」的表现，八成是属性限制，不是逻辑判断。逻辑判断通常会给你一句提示，而 maxlength、readonly、disabled、pattern 这些 HTML 属性是浏览器在输入层面直接拦掉的，连提交的机会都不给。分清这两种情况，排查方向就完全不同。</p>
+
+      <h2>F12 里那个 maxlength="1"</h2>
+      <p>按 F12 打开 Elements，选中输入框，右侧属性列表里有一行 <code>maxlength="1"</code>。就这么简单。</p>
+      <p>maxlength 是 HTML 原生属性，作用是限制用户能输入的最大字符数，由浏览器执行。它跟服务端没有任何通信——服务器根本不知道你的输入框上写了这个属性，它只是收到了一个被浏览器截断的字符串。</p>
+      <p>找到之后有三种改法：双击属性值，把 1 改成 10；或者右键选 Edit as HTML，把整个属性删掉；再或者用控制台一行搞定。三种方式效果一样，都是改当前页面内存里的 DOM。</p>
+      <pre><code class="language-bash"># 原始 HTML 大概长这样（这里的尖括号已转义）
+&lt;input type="text" name="sum" maxlength="1"&gt;
+
+# 控制台里直接改属性
+document.querySelector('input[name=sum]').maxLength = 10
+
+# 或者干脆把整个 input 重建成不带限制的
+document.querySelector('input[name=sum]').removeAttribute('maxlength')</code></pre>
+
+      <h2>改掉属性，再把正确结果提交</h2>
+      <p>改完立刻输入完整的三位数，点提交。这次表单带着完整答案发出去，页面返回了 <code>flag{...}</code>。</p>
+      <p>值得记一笔：DOM 的修改只存在于当前这个标签页里，刷新就恢复原样，因为原始 HTML 是服务器发过来的，你改的只是浏览器里的一份副本。这不影响做题——我只需要让这一次请求带上正确的值，服务器验证的是请求里的参数，不是我屏幕上显示的输入框。</p>
+      <p>换句话说，就算懒得改页面，也可以直接构造请求。既然服务器只认参数，那它根本不在乎参数是从哪个输入框来的：</p>
+      <pre><code class="language-bash">curl -s -i -X POST -d "sum=123" http://靶机地址/</code></pre>
+      <div class="note">
+        <p>改完 DOM 不要刷新，一刷新属性就回来了。另外，如果题目用 JS 在提交时再做一次校验，那改属性可能不够，得看它的校验函数——不过那是另一类题了。</p>
+      </div>
+
+      <h2>为什么前端校验不算校验</h2>
+      <p>这题的答案不在「怎么把数字打进去」，而在「为什么打不进去还能做对」。前端校验的本质是：校验代码运行在用户的机器上，而用户的机器归用户管。</p>
+      <p>浏览器拿到的是 HTML、CSS、JS 三样东西，它们全都能在本地被修改、被跳过、被替换。所以任何只在前端做的检查——长度、格式、必填，甚至「这个按钮是灰的不能点」——都只是体验优化，不是安全边界。</p>
+      <p>举个同类的例子：有些页面用 disabled 属性禁掉提交按钮，看着点不了，删掉属性就能点；有些用 JS 判断「必须是会员才能提交」，改个变量就过了。真正要挡人的判断必须发生在服务端，因为那里的代码和数据库不在攻击者手上。这题把这条结论压缩成了「改一个 maxlength」这么小的一件事。</p>
+
+      <h2>复盘与防御</h2>
+      <p>复盘一条：看到「输入被限制」，先分清是逻辑限制还是属性限制。逻辑限制会有提示、会有请求；属性限制悄无声息，改一下就好。判断依据是「有没有报错文案」和「Network 里有没有发出请求」。</p>
+      <p>防御侧：maxlength 留着对普通用户是好事，能减少误输入，但它替代不了服务端校验。服务端拿到参数后必须重新检查类型、范围、长度，哪怕前端已经查过一遍。前端校验是给人用的，服务端校验是给攻击者准备的——这句话我在这题之后就一直记着了。</p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

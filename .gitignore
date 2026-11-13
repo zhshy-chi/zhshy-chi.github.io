@@ -3,3 +3,5 @@
 /.shots/
 Thumbs.db
 .DS_Store
+/tools/_*.ps1
+/zhshy-site/

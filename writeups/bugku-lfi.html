@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku 本地包含：include 后面的坑 · zhshy</title>
+<meta name="description" content="Bugku 本地文件包含的复盘：用 /etc/passwd 验证 include，用 php://filter 读源码，顺便理清 LFI 到 RCE 的常见链条。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 本地包含：include 后面的坑">
+<meta property="og:description" content="include 把文件名交给用户之后，同一台机器上的东西就都不安全了。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-lfi.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-lfi">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">文件包含</span>
+      <span class="tag">php://filter</span>
+    </div>
+    <h1>Bugku 本地包含：include 后面的坑</h1>
+    <p class="article-meta">
+      <time datetime="2026-10-14">2026-10-14</time>
+      <span class="dot-sep">·</span>
+      <span>约 9 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      页面把文件名拼进 include，而我想要的东西，就在同一台机器上。这篇把「验证包含 → 读源码 → 找真正目标」这条线走一遍。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF · Web</td></tr>
+          <tr><th>类型</th><td>本地文件包含（LFI）</td></tr>
+          <tr><th>知识点</th><td>include 路径拼接、php://filter、源码泄露</td></tr>
+          <tr><th>目标</th><td>读到被 PHP 执行掉、页面上看不到的源码</td></tr>
+        </tbody>
+      </table>
+
+      <h2>题面：一个 file 参数</h2>
+      <p>
+        打开页面只有一个很空的模板，链接里带着 <code>?file=</code>。随手把它改成 <code>?file=about</code>，页面内容变了，说明这个参数真的被拿去加载文件了。
+        题目源码（大致）就是三行：
+      </p>
+      <pre><code class="language-php">&lt;?php
+$file = $_GET['file'] ?? 'home';
+include($file);      // 没有 basename，没有白名单，没有 realpath</code></pre>
+      <p>
+        这就是最经典的 LFI 形态：用户输入直接当路径，<code>include</code> 会在 include_path 和当前脚本目录里找这个文件。它能去的地方，比我以为的多得多。
+      </p>
+
+      <h2>第一步：先证明包含真的生效</h2>
+      <p>
+        在打任何花活之前，我要先确认「读到的内容会回显」。Linux 靶机先读 <code>/etc/passwd</code>，Windows 靶机试 <code>C:\Windows\win.ini</code>。如果页面里出现了一串 <code>root:x:0:0:root:/root:/bin/bash</code>，
+        说明漏洞是实打实的，剩下的只是「读哪个文件」的问题。
+      </p>
+      <pre><code class="language-bash">curl "http://靶机/?file=../../../../etc/passwd"
+curl "http://靶机/?file=../../../../etc/passwd%00"      # 老 PHP 的截断，5.3.4 之后没了
+curl "http://靶机/?file=C:/Windows/win.ini"</code></pre>
+      <p>
+        <code>..</code> 多写几层没关系，Linux 走到 <code>/</code> 就停住；Windows 则要注意盘符和反斜杠。
+      </p>
+
+      <h2>第二步：php://filter 把源码捞出来</h2>
+      <p>
+        直接 <code>?file=index.php</code> 是没用的：<code>include</code> 会把 index.php 当 PHP 代码执行，<code>&lt;?php ... ?&gt;</code> 里的东西全被解释掉了，我看到的还是渲染后的空模板。
+        想看源码，就得让 PHP 在「读取」阶段把内容变成不会被执行的东西 —— <code>php://filter</code> 就是干这个的。
+      </p>
+      <pre><code class="language-bash"># 把 index.php 以 base64 输出，PHP 就不会去解析它
+curl "http://靶机/?file=php://filter/convert.base64-encode/resource=index.php"
+
+# 解出来
+echo "PD9waHAgJGYgPSAkX0dFVFsnZmlsZSddOyA..." | base64 -d</code></pre>
+      <p>
+        为什么一定要 base64？因为 <code>php://filter</code> 是流包装器，数据在进入 <code>include</code> 之前就已经被转码成纯文本了。
+        如果只写 <code>resource=index.php</code>，拿到的还是原始 PHP 代码，照样被当代码执行；而 base64 之后整段是一个「不像 PHP 的字符串」，
+        <code>include</code> 找不到 <code>&lt;?php</code> 标签，就当成普通文本原样输出。这是本题的核心。
+        过滤器还能用 <code>|</code> 串联，也有 <code>convert.iconv</code> 这类做编码转换的写法，绕 WAF 时更常用。
+      </p>
+
+      <h2>第三步：从源码里找真正的目标</h2>
+      <p>
+        源码拿到手，事情就好办了。我这次读出来的 index.php 里有这么一段：真正的 flag 不在当前目录，而是被另一个文件包含进来，路径和变量名都写在代码里。
+        比我瞎猜文件名靠谱多了：
+      </p>
+      <pre><code class="language-php">&lt;?php
+// 解码后看到的关键片段
+$file = $_GET['file'] ?? 'home';
+if (strpos($file, 'flag') !== false) {
+    die('想得美');
+}
+include($file);</code></pre>
+      <p>
+        它只拦了 <code>flag</code> 这个子串，说明目标文件确实叫 flag 相关的名字。被拦了怎么办？<code>php://filter</code> 的 <code>resource=</code> 允许我再套一层路径，
+        也可以换成 <code>php://filter/read=convert.base64-encode/resource=fl&lt;something&gt;ag.php</code> 这种拼法，具体怎么绕取决于过滤强度。
+        我这里的做法是先枚举常见文件名（<code>flag.php</code>、<code>config.php</code>），确认后再读。
+      </p>
+
+      <h2>踩坑记录</h2>
+      <ul>
+        <li>第一次直接 <code>?file=php://filter/resource=index.php</code>，页面空白 —— 因为没加 <code>convert.base64-encode</code>，读到的 PHP 还是被执行了。</li>
+        <li><code>resource=</code> 后面不要再写 <code>php://</code>，否则会变成 <code>php://filter/.../resource=php://filter/...</code>，报「无法打开流」。</li>
+        <li>Windows 靶机上 <code>/etc/passwd</code> 当然读不到，先换 <code>win.ini</code> 试试。</li>
+        <li>解码时记得去掉 base64 前面的 HTML 杂讯，或者用 <code>grep -o</code> 截出那一段。</li>
+      </ul>
+
+      <h2>引申：LFI 到 RCE 的常见链条</h2>
+      <p>
+        只读文件只是 LFI 的上半场，真正的杀伤力在于 <code>include</code> 等于执行：只要能控制服务器上的某个文件内容，包含它就能执行代码。常见三种：
+      </p>
+      <ul>
+        <li><strong>日志包含</strong>：把 PHP 代码写进 User-Agent 或请求路径，让它落到 <code>/var/log/apache2/access.log</code>，再 <code>include</code> 这个日志。日志里有没有 <code>&lt;?php</code> 被转义，决定了能不能成。</li>
+        <li><strong>Session 文件包含</strong>：通过 <code>session.upload_progress</code> 或自己控制 session 值写入 <code>/tmp/sess_&lt;id&gt;</code>，再包含它。路径可预测，是很好用的一招。</li>
+        <li><strong>临时文件 / 伪协议</strong>：<code>/proc/self/environ</code>、上传临时文件配合竞争，都属于同一类思路。</li>
+      </ul>
+      <p>
+        所以要记住：LFI 的上限不是「能读多少文件」，而是「能不能读到可执行的内容」。一旦日志、session、上传目录可写且路径可猜，它就升级成 RCE。
+      </p>
+
+      <p>
+        顺便记一下另外两个伪协议：<code>php://input</code> 和 <code>data://</code> 也能被 include，但它们要 <code>allow_url_include=On</code>，
+        默认是关的，所以大多数比赛题里走不通。真正通用的是 <code>php://filter</code>，因为它不需要任何开关。
+      </p>
+
+      <h2>防御建议</h2>
+      <ul>
+        <li>不要把用户输入直接拼进 <code>include</code>；如果业务确实要动态加载，用白名单映射（<code>['home' =&gt; 'pages/home.php']</code>）。</li>
+        <li>用 <code>realpath()</code> 求真实路径后，校验它是否仍在前缀目录内，防止 <code>..</code> 和符号链接。</li>
+        <li>关掉 <code>allow_url_include</code>，设置 <code>open_basedir</code> 限定可访问目录。</li>
+        <li>日志、session 目录不要放在 Web 根下，也不要用可被包含的权限暴露。</li>
+      </ul>
+
+      <div class="note">
+        <p>本文只记录公开靶场里的学习过程，flag 统一写作 flag{...}。真实站点请勿未授权测试。</p>
+      </div>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

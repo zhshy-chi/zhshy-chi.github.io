@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ↓↓↓ 改这里：标题 / 描述 / 地址 ↓↓↓ -->
+<title>Bugku ' or 1=1：第一句注入 · zhshy</title>
+<meta name="description" content="从 ' or 1=1 # 讲起：登录框拼接 SQL 的原理、注释符 # 与 -- 的区别、order by 猜字段和 union 找回显位，以及参数化查询为什么能根治。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku ' or 1=1：第一句注入">
+<meta property="og:description" content="这大概是所有人的第一句 SQL 注入，它教的不是 payload，而是输入是怎么变成 SQL 语句的。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-or1.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<!-- ↓ data-slug 必须和 writeups.js 里的 slug 一致，上一篇/下一篇才能对上 ↓ -->
+<body data-page="article" data-slug="bugku-or1">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">SQL注入</span>
+      <span class="tag">联合查询</span>
+    </div>
+    <h1>Bugku ' or 1=1：第一句注入</h1>
+    <p class="article-meta">
+      <time datetime="2026-10-25">2026-10-25</time>
+      <span class="dot-sep">·</span>
+      <span>约 9 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      这大概是所有人的第一句 SQL 注入。它教的其实不是那串 payload，而是「你输入的东西，是怎么一步步变成 SQL 语句的」。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF</td></tr>
+          <tr><th>类型</th><td>Web / SQL 注入</td></tr>
+          <tr><th>知识点</th><td>字符型注入、注释符、order by、union</td></tr>
+        </tbody>
+      </table>
+
+      <h2>登录框背后发生了什么</h2>
+      <p>页面是一个再普通不过的登录框：用户名、密码、登录按钮。抓包看，POST 到 check.php，两个字段。这类题的后端代码几乎可以背下来：</p>
+      <pre><code class="language-sql">SELECT * FROM users WHERE name = '$u' AND pass = '$p';</code></pre>
+      <p>关键在于是字符串拼接，不是参数化。$u 和 $p 被原样塞进 SQL 文本，数据库再去解析它。也就是说，我们输入的内容有机会「跳出引号」，变成语句结构的一部分。这就是注入的本质：代码和数据没有分开，而数据库并不认识哪一段是用户写的。</p>
+      <p>还有一点值得注意：后端通常不比对密码明文，而是执行查询后看结果集是否非空（num_rows 大于 0），非空就发会话、跳后台。所以只要能造出一行结果，密码是什么并不重要 —— 这题的漏洞不在密码校验逻辑，而在 SQL 语句的构造方式。</p>
+
+      <h2>为什么 ' or 1=1 # 能进去</h2>
+      <p>把 $u 换成 ' or 1=1 #，$p 随便填，拼出来的句子是：</p>
+      <pre><code class="language-sql">SELECT * FROM users WHERE name = '' or 1=1 #' AND pass = 'x';</code></pre>
+      <p>逐段读一遍：第一个单引号闭合了原来 name 的引号；or 1=1 让 WHERE 条件恒为真；# 把后面包括密码判断在内的所有内容注释掉。查询于是变成「选出所有用户」，后端只要判断结果集非空就认为登录成功 —— 密码从头到尾没参与判断。</p>
+      <p>这里有个容易被忽略的点：为什么注 name 而不是 pass？因为 name 在前面，一个注释符就能顺手干掉后面的密码条件。如果只注 pass，还要先处理前面那个引号，反而绕。</p>
+
+      <h2>注释符：# 与 -- 的差别</h2>
+      <p>MySQL 里 # 是行注释，-- 也是，但 -- 后面必须跟一个空格（或控制字符），否则不会被当成注释。这一点在手工注入时特别坑：写 -- 不带空格，整条语句语法错误，页面报错，你会误以为注入点不存在。另外 URL 里的 # 会被浏览器当成锚点，必须编码成 %23。</p>
+      <pre><code class="language-bash">' or 1=1 %23
+' or 1=1 -- </code></pre>
+      <p>两种写法等价。我后来固定用 %23，因为它不会因为末尾空格被浏览器或代理吞掉而出错。</p>
+
+      <h2>用 order by 和 union 继续往下问</h2>
+      <p>能登录只是开始。既然能控制查询，就能让它回显别的东西。第一步确定原查询有几个字段：</p>
+      <pre><code class="language-sql">' order by 1 %23
+' order by 2 %23
+' order by 3 %23</code></pre>
+      <p>第三条报错，说明原查询是两个字段。第二步用 union select 找回显位，union 要求两边列数一致，所以写成 union select 1,2：</p>
+      <pre><code class="language-sql">' union select 1,2 %23</code></pre>
+      <p>页面会把 1 和 2 显示在原来显示用户名、密码的位置，这两个位置就是回显位。之后把想查的函数塞进去就行，比如 union select database(),user()，再往下就能查表名、列名、拿账号。</p>
+      <p>这一步也解释了 union 的两个硬性条件：列数相同，且对应列的类型能兼容。所以常见写法是把数字填在字符串列的位置上 —— 数字在 MySQL 里会被隐式转换，不容易报错，回显也干净。</p>
+
+      <h2>踩坑与复盘</h2>
+      <ul>
+        <li>最初用 admin' or '1'='1，引号配对很容易数错，后来统一成 ' or 1=1 #；</li>
+        <li>URL 里的 # 没编码，整段 payload 被当成锚点截断，白试了好几次；</li>
+        <li>字段数猜错时页面直接空白，别急着换 payload，先怀疑列数；</li>
+        <li>登录成功后别停，回显位才是这题真正的入口。</li>
+      </ul>
+
+      <h2>参数化查询为什么能根治</h2>
+      <p>因为它把 SQL 文本和参数分成两条路走：数据库先编译好语句模板（? 占位），再把用户输入当作「纯数据」填进去。输入的 ' 不再是语法符号，只是一个普通字符，靠闭合引号改变句式这条路从根上不成立。这也是现代框架的 ORM 基本不再手写拼接的原因。</p>
+      <p>防守方还有几层可加：数据库账号最小权限、关掉详细报错（别把 SQL 报错回显给用户）、登录失败统一提示。真正拦住注入的不是「过滤关键字」—— 黑名单永远漏，而是让数据没有机会变成代码。</p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ↓↓↓ 改这里：标题 / 描述 / 地址 ↓↓↓ -->
+<title>Bugku 成绩单：union 注入把别人的分数读出来 · zhshy</title>
+<meta name="description" content="从判断数字型注入、order by 猜字段数，到用 union select 找回显位、查 information_schema 拿表名列名，最后拼出完整的注入链。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 成绩单：union 注入把别人的分数读出来">
+<meta property="og:description" content="页面只有一个查询框，既然能控制查询，就能让它查我想看的东西。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-score.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<!-- ↓ data-slug 必须和 writeups.js 里的 slug 一致，上一篇/下一篇才能对上 ↓ -->
+<body data-page="article" data-slug="bugku-score">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">SQL注入</span>
+      <span class="tag">union</span>
+      <span class="tag">information_schema</span>
+    </div>
+    <h1>Bugku 成绩单：union 注入把别人的分数读出来</h1>
+    <p class="article-meta">
+      <time datetime="2026-10-27">2026-10-27</time>
+      <span class="dot-sep">·</span>
+      <span>约 10 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      页面只有一个查询框，返回一张成绩表。既然我能控制这条查询，就能让它查我本来不该看到的东西 —— 这次的目标是整张 admin 表。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF</td></tr>
+          <tr><th>类型</th><td>Web / union 注入</td></tr>
+          <tr><th>知识点</th><td>数字型判断、order by、union select、information_schema</td></tr>
+        </tbody>
+      </table>
+
+      <h2>只有一个查询框</h2>
+      <p>页面中间一个输入框，输入学号，返回一张成绩表：姓名、学号、分数。没有登录，没有 cookie，请求是 GET，参数长这样：?id=1。先试 id=1、id=2 都能出结果，说明数据是按参数查的；再试 id=1' 直接报错，说明单引号被带进了 SQL —— 有戏。</p>
+      <p>我习惯先不急着上 payload，而是把「正常请求长什么样」记下来：响应里表格有几列、报错页长什么样。后面判断真假的时候，全靠这两个基线。</p>
+      <p>顺带记一下响应长度：正常页大概几 KB，空结果明显更短。有些差异肉眼看不出来，但在 Burp 的 Length 列里一眼就能看到，这比盯着页面猜要可靠得多。</p>
+
+      <h2>先判断注入类型</h2>
+      <p>数字型和字符型的区别在于有没有引号包裹。数字型可以直接接 and，字符型得先闭合引号。用两个恒真/恒假的表达式试：</p>
+      <pre><code class="language-sql">?id=1 and 1=1
+?id=1 and 1=2</code></pre>
+      <p>前者正常返回、后者返回空表，说明 and 生效，是数字型（没有引号挡着）。如果是字符型，1 and 1=1 会整体被当成字符串，得写成 1' and '1'='1 才对。</p>
+
+      <h2>order by 确定字段数</h2>
+      <p>成绩表看起来是 3 列，但页面显示的列不等于查询里的列 —— 后端可能查了 5 个字段只显示 3 个。用 order by 二分：</p>
+      <pre><code class="language-sql">?id=1 order by 3
+?id=1 order by 4</code></pre>
+      <p>第三条正常，第四条报 Unknown column，说明原查询是 3 个字段。这一步不能省，union 的列数必须和原查询严格一致，少一列多一列都会失败。</p>
+
+      <h2>union select 找回显位</h2>
+      <p>先用一个不存在的 id 让前半段查空，这样页面只会显示 union 后面的结果：</p>
+      <pre><code class="language-sql">?id=-1 union select 1,2,3</code></pre>
+      <p>1、2、3 分别出现在姓名、学号、分数三列里，三个位置都能回显。实际做题时未必要三个都用，挑一个不被截断的塞函数就行。</p>
+
+      <h2>从 information_schema 摸表结构</h2>
+      <p>MySQL 5.0 之后自带 information_schema，它是「关于数据库的数据库」：有哪些库、哪些表、哪些列全记在里面。先看当前库和版本：</p>
+      <pre><code class="language-sql">?id=-1 union select 1,database(),version()</code></pre>
+      <p>假设拿到库名 ctf、版本 5.7。接着查表名，用 group_concat 一次把多行拼成一行，省得翻页：</p>
+      <pre><code class="language-sql">?id=-1 union select 1,2,group_concat(table_name)
+from information_schema.tables where table_schema='ctf'</code></pre>
+      <p>得到 users,score,admin 三张表。再查 admin 的列名：</p>
+      <pre><code class="language-sql">?id=-1 union select 1,2,group_concat(column_name)
+from information_schema.columns where table_name='admin'</code></pre>
+      <p>如果表很多，group_concat 会被长度限制截断（默认 1024 字节），可以加 limit 0,10 分段取，或者用 substring_index 拆开。我第一次就只拿到半张表名，还以为是权限不够。</p>
+
+      <h2>把要的字段拼到回显位</h2>
+      <p>知道表名和列名之后，把真实数据查出来。用 0x3a（冒号）或 concat 拼接，一行里多带几个字段：</p>
+      <pre><code class="language-sql">?id=-1 union select 1,2,group_concat(username,0x3a,password) from admin</code></pre>
+      <p>分数列里就是一串 user:hash。密码是 MD5，拿去查一下或者按弱口令猜，最终拿到 flag{...}（真实内容已隐去）。完整链条其实就是四步：判类型 → 数字段 → union 找位 → 查元数据再查数据。</p>
+
+      <h2>为什么 information_schema 是关键</h2>
+      <p>没有它，注入只能靠猜表名和列名，效率低到不现实。它本质上是元数据：结构信息本身也是数据，一旦泄露，攻击者就不用猜了 —— 相当于把地图直接给了对方。所以生产环境里，业务账号通常只授予目标库的 SELECT 权限，读不到别的库；有的加固方案还会直接限制对它的访问。</p>
+
+      <h2>复盘与防守方视角</h2>
+      <ul>
+        <li>一开始 union select 1,2 少了列，页面空白，我以为是过滤，其实只是列数不对；</li>
+        <li>group_concat 有长度上限（默认 1024），表多的时候会截断，可以配合 limit 分段；</li>
+        <li>查列名时忘了加 table_schema，结果从别的库里翻出一堆同名表。</li>
+      </ul>
+      <p>防守上：参数化查询是根，最小权限是止损，关掉报错详情是隐藏线索。另外这张成绩单本来就不该由前端决定「查谁」—— 应该从会话里取当前用户，而不是接受一个 id 参数。很多越权就是这样和注入叠在一起出现的。</p>
+      <p>整题做完我只用了浏览器和 Burp，没上 sqlmap。不是说工具不好，而是手工走一遍才知道每一步为什么成立 —— 脚本能替你跑，但不能替你判断字段数和回显位。</p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

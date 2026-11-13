@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku /.- ：从摩斯密码开始的第一道密码题 · zhshy</title>
+<meta name="description" content="记录 Bugku 摩斯密码题的完整思路：怎么分组点划、为什么斜杠是分隔符、解码后还要解一层 %u7b 与 %u7d 的 Unicode 编码，最后用 Python 手写二十行解码器。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku /.- ：从摩斯密码开始的第一道密码题">
+<meta property="og:description" content="点划、空格、斜杠、%uXXXX，一层一层剥开第一道密码题。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-morse.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-morse">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Crypto</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Crypto">Crypto</span>
+      <span class="tag">摩斯密码</span>
+      <span class="tag">编码识别</span>
+    </div>
+    <h1>Bugku /.- ：从摩斯密码开始的第一道密码题</h1>
+    <p class="article-meta">
+      <time datetime="2026-11-04">2026-11-04</time>
+      <span class="dot-sep">·</span>
+      <span>约 7 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      一串点和划，还有斜杠。斜杠不是字符，是分隔符。这道题真正想教的不是摩斯表，而是「先分清哪个符号是数据、哪个符号是结构」。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF</td></tr>
+          <tr><th>类型</th><td>Crypto（编码类）</td></tr>
+          <tr><th>知识点</th><td>摩斯密码、分隔符、URL 编码、Python 解码</td></tr>
+          <tr><th>flag</th><td>flag{...}</td></tr>
+        </tbody>
+      </table>
+      <p>题目页面非常干净，只有一段由点、短横线和斜杠组成的文本，没有附件，也没有提示。第一眼看上去像乱码，但只要认出它是摩斯密码，剩下的基本就是体力活加一点耐心。</p>
+
+      <h2>摩斯密码到底长什么样</h2>
+      <p>摩斯密码的规则其实只有三条：每个字母由一至四个「点」或「划」组成；字母和字母之间用空格分开；单词和单词之间用斜杠分开。点代表短信号，划代表长信号，在真实电报里两者的时长大约是一比三，所以听电报名手能直接听出节奏。</p>
+      <p>它是一套完全公开的对照表，不涉及任何密钥，所以只要分组正确，解码结果就是唯一的，不存在「解不出来」这种情况。也正因为规则太简单，出题人能动手脚的地方只剩两个：把分隔符藏起来，或者在解出来的明文上再套一层编码。这道题两样都做了。</p>
+      <p>另外，摩斯码不区分大小写，标准表里也没有花括号。所以当解码结果里「flag」后面跟着奇怪的东西时，那基本是第二层编码在等你。</p>
+
+      <h2>先肉眼分组，再交给工具</h2>
+      <p>我最开始的错误做法是把整段文本直接粘进在线解码器，结果出来一堆问号。原因不在解码器，而在复制过程中分隔符丢了：网页里的换行被吃掉、行尾空格被裁掉，于是「.-」和「.-..」粘成了一个不存在的码。后来我改成先手动规整，再解码，一次就通了。</p>
+      <p>规整的目标只有一件事：让斜杠和空格各就各位。斜杠是词分隔，空格是字母分隔，两者不能混用；有些题目喜欢用换行代替斜杠，那就先把换行换成斜杠再处理。</p>
+      <pre><code class="language-bash"># 用换行当词分隔的题目：先把换行换成斜杠
+tr '\n' '/' &lt; morse.txt &gt; step1.txt
+# 再把连续空格压成一个，避免出现空字段
+tr -s ' ' &lt; step1.txt &gt; clean.txt</code></pre>
+      <p>分组之后还要看一眼自己的表有没有缺。数字和标点的摩斯码更长（通常五到六个符号），更容易和字母混；如果题目只要求字母，就别把数字表塞进同一张字典。</p>
+      <p>肉眼检查的顺序我一般是这样：先数斜杠确认词数，再挑最短的码（一个点、一个划）去对表验证空格位置，最后才整段跑。</p>
+
+      <h2>解码之后还有一层：URL 编码</h2>
+      <p>摩斯解出来的明文并不是 flag，而是形如 <code>flag%u7b...%u7d</code> 的东西。第一次看到的时候我以为是乱码，盯着看了半天才反应过来：<code>%u7b</code> 和 <code>%u7d</code> 正是左花括号和右花括号的老式 Unicode 编码（%uXXXX 形式），出题人把花括号也编码了，就是为了不让你一眼看出 flag 的形状。</p>
+      <p>这里有个很常见的坑：Python 的 <code>urllib.parse.unquote</code> 只认 %XX 这种八位编码，碰到 %uXXXX 会原样保留，一点用都没有。要么换一个支持 %u 的在线工具，要么自己写正则替换。我选了后者，因为顺手，而且以后遇到同类题可以直接复用。</p>
+      <pre><code class="language-python">import re
+
+s = 'flag%u7b...%u7d'
+
+# %u7b 是 4 位十六进制，转成对应字符即可
+s = re.sub(r'%u([0-9a-fA-F]{4})', lambda m: chr(int(m.group(1), 16)), s)
+print(s)          # flag{...}</code></pre>
+      <p>顺手说一句，%u 并不是标准 URL 编码，而是早期 JavaScript 的 escape() 留下的历史包袱；标准写法是 %7B 和 %7D。两种都要认识。</p>
+
+      <h2>自己写一个二十行的解码器</h2>
+      <p>在线工具当然够用，但我还是照着对照表自己写了一遍。理由很简单：写一遍之后，「空格是字母分隔、斜杠是词分隔、查表前先 strip」这三件事就再也不会记错了。核心只有两步：先按斜杠切词，再按空格切字母，逐段查表。</p>
+      <pre><code class="language-python">CODE = {
+    '.-': 'A', '-...': 'B', '-.-.': 'C', '-..': 'D', '.': 'E',
+    '-..-.': 'F', '--.': 'G', '....': 'H', '..': 'I', '.---': 'J',
+    '-.-': 'K', '.-..': 'L', '--': 'M', '-.': 'N', '---': 'O',
+}
+# 真实题目要把 26 个字母和 10 个数字补全
+
+def decode(text):
+    words = text.strip().split('/')      # 斜杠 = 词分隔
+    out = []
+    for w in words:
+        letters = w.split()              # 空白 = 字母分隔
+        out.append(''.join(CODE.get(x, '?') for x in letters))
+    return ' '.join(out)
+
+print(decode('.... . .-.. .-.. --- / .-- --- .-. .-.. -..'))
+# HELLO WORLD</code></pre>
+      <p>这段里最值得记的是 <code>w.split()</code>：不带参数时它会把连续空格、行首行尾的空白一并处理掉，比 <code>split(' ')</code> 稳得多。后者遇到两个连续空格会切出一个空字符串，查表自然查不到，于是结果里莫名多出问号——我第一次卡住就是因为这个。</p>
+
+      <h2>踩坑与复盘</h2>
+      <ul>
+        <li>把整段文本丢给在线工具，分隔符在复制时丢了，却以为是题目写错。</li>
+        <li>把 <code>%u7b</code> 当成乱码，绕了十几分钟才发现它是花括号。</li>
+        <li>摩斯码不区分大小写，题目要的却是小写，最后补了一句 <code>lower()</code>。</li>
+        <li>斜杠和反斜杠长得像，从截图里抄的时候看错了一次，分组直接错位。</li>
+      </ul>
+      <p>复盘下来，这类题考的不是聪明，而是「每一步都验证一下」。分组对不对，拿几个最短的码对表就知道；结果是不是最终答案，看形状像不像 flag；中间出现 %、= 这类符号，基本说明还有一层。</p>
+
+      <h2>一点引申：编码不是加密</h2>
+      <p>摩斯密码、URL 编码、Base64、十六进制，这些都属于「编码」：把信息换一种表示方式，规则公开，任何人拿到都能还原。加密不一样，它需要密钥，不知道密钥就真的还原不出来。CTF 里所谓的「密码题」，第一层往往是编码，真正涉及密码学的部分（RSA、AES、异或）通常藏在后面几层。</p>
+      <p>分清这两件事的意义在于：看到一串奇怪的字符，先问「它是哪种编码」，而不是「它是什么密码」。后者会让你去猜密钥，前者只需要查表。这道题从头到尾没有密钥，只有两张对照表和一次正则替换——它真正想让你学会的，是这种「分层剥离」的直觉。</p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

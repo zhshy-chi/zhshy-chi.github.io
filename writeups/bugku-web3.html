@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku web3：关不掉的弹窗和一段实体编码 · zhshy</title>
+<meta name="description" content="页面疯狂弹窗，关一个开一个。把 JS 关掉看源码，底部那串 HTML 实体编码解出来就是答案。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku web3：关不掉的弹窗和一段实体编码">
+<meta property="og:description" content="页面疯狂弹窗，关一个开一个。把 JS 关掉看源码，底部那串 HTML 实体编码解出来就是答案。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-web3.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-web3">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">HTML 实体编码</span>
+      <span class="tag">弹窗</span>
+    </div>
+    <h1>Bugku web3：关不掉的弹窗和一段实体编码</h1>
+    <p class="article-meta">
+      <time datetime="2026-09-27">2026-09-27</time>
+      <span class="dot-sep">·</span>
+      <span>约 6 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku 练习场</span>
+    </p>
+    <p class="article-lead">
+      页面疯狂弹窗，关一个开一个。正确做法不是和它较劲，而是把 JS 关掉看源码。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku 练习场</td></tr>
+          <tr><th>类型</th><td>Web · 前端干扰</td></tr>
+          <tr><th>知识点</th><td>alert 死循环、禁用 JavaScript、HTML 实体编码</td></tr>
+        </tbody>
+      </table>
+      <p>这题是我印象最深的一道「非漏洞」题。它没有服务端逻辑，只有一个很烦人的前端脚本和一段编码过的手写字符串，考的是你会不会绕开干扰，而不是会不会攻击。</p>
+
+      <h2>一打开就是弹窗地狱</h2>
+      <p>点开链接，alert 一个接一个。关掉一个，下一个立刻弹出来，鼠标都快点不过来。看页面源码大概是这种结构：</p>
+      <pre><code class="language-js">while (true) {
+  alert('...');
+}
+// 或者用定时器，隔几十毫秒弹一次
+setInterval(function () { alert('...'); }, 50);</code></pre>
+      <p>不管哪种写法，它都是死循环：你关掉的是弹窗，循环还在跑，下一轮马上又弹一个。而且 alert 会阻塞 JS 执行，在弹窗被点掉之前，页面上的其它脚本也动不了。</p>
+      <p>这类题的设计意图很明显——用弹窗占满注意力，让你没机会看页面本身。我第一次就是硬关了几十次，最后发现页面内容压根没加载出来，纯属浪费时间。后来才想明白，它不是在跟我比手速。</p>
+
+      <h2>别关弹窗，先把 JS 关掉</h2>
+      <p>正确做法是让 JS 根本不执行。Chrome 开发者工具有个命令菜单：Ctrl+Shift+P，输入 Disable JavaScript，回车。刷新页面，弹窗没了，页面底部的内容露出来。这个开关只对当前 DevTools 会话生效，关掉面板或重开浏览器就恢复。</p>
+      <p>另外两条路也很好用：地址栏输入 <code>view-source:http://靶机地址/</code>，直接看服务器返回的文本，JS 完全不参与；或者用命令行把响应存下来慢慢看。用 view-source 有个额外好处——你能确定看到的是服务器发来的原始内容，而不是被 JS 改过之后的 DOM。这题两种结果一样，但养成这个习惯能省掉很多「源码和 Elements 对不上」的困惑。</p>
+      <pre><code class="language-bash">curl -s http://靶机地址/ &gt; page.html
+grep -o "&amp;#x\?[0-9a-fA-F]\+;" page.html | head -n 20</code></pre>
+
+      <h2>底部那串 &amp;#xxx;</h2>
+      <p>页面底部挂着一长串形如 <code>&amp;#102;&amp;#108;&amp;#97;&amp;#103;</code> 的东西。这是 HTML 数字字符引用（numeric character reference），<code>&amp;#</code> 后面跟一个十进制码点，浏览器渲染时会把它还原成对应的字符。<code>&amp;#102;</code> 是 f，<code>&amp;#108;</code> 是 l，<code>&amp;#97;</code> 是 a，<code>&amp;#103;</code> 是 g，拼起来正好是 flag 的开头。</p>
+      <p>除了十进制，还有十六进制写法 <code>&amp;#x66;</code>；除了数字引用，还有 <code>&amp;lt;</code>、<code>&amp;amp;</code>、<code>&amp;quot;</code> 这类命名实体。三种东西在浏览器眼里是一回事：都是用 ASCII 字符表示某一个字符。</p>
+      <p>这题把整串结果都编码了，大小写、花括号、下划线一个不落。数字引用本身是区分大小写的——<code>&amp;#70;</code> 是大写 F，<code>&amp;#102;</code> 是小写 f——所以解码之后必须逐位核对，不能想当然地按小写抄。</p>
+
+      <h2>解码，然后逐位核对</h2>
+      <p>解码最省事的办法是浏览器控制台。把底部那串文本复制过来，赋给一个变量，然后借 textarea 让浏览器自己解析实体：</p>
+      <pre><code class="language-js">var s = '&amp;#102;&amp;#108;&amp;#97;&amp;#103;...';
+var d = document.createElement('textarea');
+d.innerHTML = s;
+console.log(d.value);</code></pre>
+      <p>innerHTML 会让浏览器把实体解析掉，再读 value 就拿到明文。这里用 textarea 而不是直接 innerHTML 到页面上，是因为直接插进页面就等于自己给自己制造一个 XSS。</p>
+      <p>也可以用 Python 一行搞定，把那段编码粘贴进去：</p>
+      <pre><code class="language-bash">python -c "import html,sys; print(html.unescape(sys.stdin.read()))"</code></pre>
+      <p>解出来是 <code>flag{...}</code> 这一串。我抄进提交框之前又对着页面原文核了一遍大小写和花括号，确认没因为手抄漏字符——这题平台是严格匹配的，差一个字母都过不了。核对完提交，通过。</p>
+      <div class="note">
+        <p>手抄编码串很容易出错，尤其是 l 和 1、0 和 O。更稳的做法是把解码结果直接重定向到文件，再用 Ctrl+F 搜 flag，减少中间环节。</p>
+      </div>
+
+      <h2>实体编码在 XSS 里的影子</h2>
+      <p>HTML 实体编码在 XSS 里是个常见的绕过点。很多 WAF 或过滤函数只匹配字面量的 script 标签，但浏览器解析 HTML 时会先把实体解码，所以源码里写成实体形式的内容，到了 DOM 里就是真正的标签。</p>
+      <p>举个例子：如果过滤把 <code>&lt;</code> 拦了，却没拦 <code>&amp;#60;</code>，那么 <code>&amp;#60;img src=x onerror=alert(1)&amp;#62;</code> 进入 HTML 后会被浏览器解码成一段真正的 img 标签，onerror 照样执行。绕过能成立的前提是：实体只在 HTML 解析上下文里被解码。写在 script 标签内部的字符串不会，那是 script data 状态，<code>&amp;#60;</code> 在那里就只是几个普通字符。所以注入点落在正文、属性值、还是 JS 字符串里，三种情况的利用方式完全不同。</p>
+      <p>这题本身没有漏洞，但它让我第一次意识到「你看到的不等于浏览器解析后的」。这个差别在 XSS 里就是能不能打进去的差别，也是我后来做题时愿意多看一眼源码的原因。</p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

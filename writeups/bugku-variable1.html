@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku 变量1：用 $GLOBALS 覆盖变量 · zhshy</title>
+<meta name="description" content="Bugku 变量1 的解题笔记：从可变变量 $$args 到 $GLOBALS，讲清 PHP 变量覆盖为什么能把变量里的 flag 读出来。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 变量1：用 $GLOBALS 覆盖变量">
+<meta property="og:description" content="从可变变量到 $GLOBALS：一次 PHP 变量覆盖的复盘。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-variable1.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-variable1">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">变量覆盖</span>
+      <span class="tag">PHP超全局</span>
+    </div>
+    <h1>Bugku 变量1：用 $GLOBALS 覆盖变量</h1>
+    <p class="article-meta">
+      <time datetime="2026-10-12">2026-10-12</time>
+      <span class="dot-sep">·</span>
+      <span>约 8 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      题目里有个变量挡住了我，那我就从外部把同名变量塞进去。这篇记录我第一次真正弄懂「可变变量」和 $GLOBALS 是怎么一回事。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF · Web</td></tr>
+          <tr><th>类型</th><td>PHP 变量覆盖 / 符号表读取</td></tr>
+          <tr><th>知识点</th><td>可变变量、$GLOBALS、extract 与 parse_str</td></tr>
+          <tr><th>目标</th><td>读出被藏在变量里的 flag</td></tr>
+        </tbody>
+      </table>
+
+      <h2>先看题面：flag 在某个变量里</h2>
+      <p>
+        页面很朴素，一段高亮出来的源码。大意是：flag 被写进一个变量，程序拿我传进去的 args 去比较，通过才输出。
+        我第一反应是找那个比较逻辑、想构造一个能骗过判断的字符串，盯了两分钟才反应过来方向错了 —— 它不打算让我猜中 flag，它把「变量名」交给我了。
+      </p>
+      <pre><code class="language-php">&lt;?php
+include "flag.php";          // 文件里有一句 $flag = "flag{...}";
+highlight_file(__FILE__);
+
+$args = $_GET['args'] ?? '';
+if (!preg_match('/^\w+$/', $args)) {
+    die('args error');
+}
+
+// 把 $args 的值当成变量名，再取这个变量的值
+var_dump($$args);</code></pre>
+      <p>
+        关键就在最后一行。<code>$$args</code> 不是「变量 args 的平方」，而是可变变量：先取 <code>$args</code> 的值（一个字符串），再把这个字符串当成变量名去取值。
+        所以传 <code>?args=flag</code>，等价于 <code>var_dump($flag)</code>。我第一次也是这么想的，结果页面一片空白。
+      </p>
+
+      <h2>卡住的地方：名字不对</h2>
+      <p>
+        <code>?args=flag</code> 没有任何回显，说明符号表里没有叫 <code>flag</code> 的变量。这时候有两条路：硬猜变量名，或者把整张符号表倒出来。第二条更聪明，而 PHP 恰好把这张表本身也做成了一个变量。
+      </p>
+      <p>
+        <code>$GLOBALS</code> 是 PHP 的超全局数组，索引是全局变量的名字，值是变量本身。它是对符号表的引用而非副本：往 <code>$GLOBALS['x']</code> 写东西，等于创建了 <code>$x</code>。
+        既然题目允许我用任意字符串当变量名，那传 <code>GLOBALS</code> 进去，它就会把整张表 dump 出来，flag 自然躺在里面。
+      </p>
+      <pre><code class="language-bash">curl "http://靶机地址/?args=GLOBALS"
+# 响应里能看到 ["flag"]=&gt; string(38) "flag{...}"</code></pre>
+
+      <h2>为什么用户输入能改掉「本来只读」的变量</h2>
+      <p>
+        这里其实发生了两次「名字 → 值」的跳跃，我在笔记里是这么画的：
+      </p>
+      <ul>
+        <li>第一跳：HTTP 参数 <code>args=GLOBALS</code> 变成 <code>$_GET['args']</code>，再赋给 <code>$args</code>。这步很普通，值只是个字符串。</li>
+        <li>第二跳：<code>$$args</code> 拿这个字符串当变量名，去全局符号表里查。查哪张表？就是 <code>$GLOBALS</code> 那张。</li>
+      </ul>
+      <p>
+        所以严格说，<code>$flag</code> 没被修改过，我只是「按名字读」到了它。安全上这叫变量覆盖：程序把「变量名」这种元信息交给了用户，等于把符号表的读写权限一起交了出去。名字能选，值就能选。
+      </p>
+      <p>
+        另一类常见写法是 <code>extract($_GET)</code> 或 <code>parse_str($str)</code>：数组的键直接变成变量，访问 <code>?flag=x</code> 就产生了 <code>$flag</code>。
+        区别在于 <code>$$args</code> 偏向「读」，<code>extract</code> 偏向「写」—— 后者能覆盖程序自己的判断变量，比如把 <code>$isAdmin</code> 改成 true。
+      </p>
+      <pre><code class="language-php">&lt;?php
+// 危险写法：用户的键名直接进了符号表
+extract($_GET);
+if ($isAdmin) {           // 访问 ?isAdmin=1 就能进来
+    echo "welcome, admin";
+}</code></pre>
+      <p>
+        还有个容易混的点：<code>global $x;</code> 是把全局变量「引进」当前作用域，改的还是同一个变量；而 <code>$GLOBALS['x']</code> 是直接操作符号表本身。
+        两者都能改值，但后者不需要提前声明，配合可变变量就更危险 —— 只要名字对得上，什么变量都能碰。
+      </p>
+
+      <h2>踩过的几个坑</h2>
+      <ul>
+        <li>只盯着「比较」两个字。以为要爆破或者构造 payload，其实题目考的是「能不能读到变量」，跟比较逻辑没关系。</li>
+        <li>直接 <code>?args=flag</code> 没回显。正确姿势是先枚举符号表，而不是硬猜变量名，<code>$GLOBALS</code> 就是那张表。</li>
+        <li>写成 <code>$_GLOBALS</code>。少一个下划线就是未定义变量，页面白屏，很容易误以为被拦了。</li>
+      </ul>
+
+      <h2>引申：register_globals 与真实代码里的变量覆盖</h2>
+      <p>
+        老 PHP（5.4 之前）有个配置项 <code>register_globals</code>，打开后 GET/POST/Cookie 的参数会被自动注册成全局变量，等于全站默认开着 <code>extract($_REQUEST)</code>。
+        这个选项在 PHP 5.4.0 被移除，但影子还在：老 CMS 里常见的 <code>foreach ($_GET as $k =&gt; $v) { $$k = $v; }</code> 就是同一个洞。
+      </p>
+      <p>
+        另外，<code>$GLOBALS</code> 本身只是个普通数组，<code>foreach ($GLOBALS as $k =&gt; $v)</code> 就能把运行时的变量名和值全部打印出来。
+        我在本地调试 PHP 时经常用它看「到底有哪些变量还活着」，但换个位置，它就是标准的敏感信息泄露。
+      </p>
+      <p>
+        真实代码里变量覆盖的危害通常比「读一个 flag」严重得多：覆盖 <code>$table</code>、<code>$class</code>、<code>$action</code> 可以改 SQL 拼接、改包含的文件、
+        改反序列化的类名。所以我现在审计 PHP 代码会专门搜三个关键词：<code>extract(</code>、<code>parse_str(</code>、<code>$$</code>。看到它们就停下来想一句：
+        这个变量名，用户能不能控制？
+      </p>
+
+      <h2>防御建议</h2>
+      <ul>
+        <li>别用 <code>extract()</code> / <code>parse_str()</code> 处理外部输入；非要用就加 <code>EXTR_SKIP</code>。</li>
+        <li>干掉任何「变量名来自用户」的写法：<code>$$name</code>、<code>${$name}</code>、<code>$obj-&gt;$prop</code>。</li>
+        <li>用固定白名单分发（<code>switch ($action)</code>），不要动态拼符号表。</li>
+        <li>输出敏感值前，确认请求真的过了业务校验，而不是「名字对上就打印」。</li>
+      </ul>
+
+      <div class="note">
+        <p>本文只记录公开靶场里的学习过程，flag 统一写作 flag{...}。真实站点请勿未授权测试。</p>
+      </div>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

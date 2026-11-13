@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku 域名解析：改 hosts 骗过浏览器 · zhshy</title>
+<meta name="description" content="题目要求用域名访问，但那域名解析不到靶机。自己当一次 DNS：改 hosts、清缓存、验证，顺便聊聊 hosts 劫持。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 域名解析：改 hosts 骗过浏览器">
+<meta property="og:description" content="题目要求用域名访问，但那域名解析不到靶机。自己当一次 DNS：改 hosts、清缓存、验证。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-domain.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-domain">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">hosts</span>
+      <span class="tag">DNS</span>
+    </div>
+    <h1>Bugku 域名解析：改 hosts 骗过浏览器</h1>
+    <p class="article-meta">
+      <time datetime="2026-09-29">2026-09-29</time>
+      <span class="dot-sep">·</span>
+      <span>约 7 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku 练习场</span>
+    </p>
+    <p class="article-lead">
+      题目要求用某个域名访问，但那域名根本解析不到靶机。那就自己当一次 DNS。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku 练习场</td></tr>
+          <tr><th>类型</th><td>Web · 环境配置</td></tr>
+          <tr><th>知识点</th><td>DNS 解析顺序、hosts 文件、ipconfig /flushdns</td></tr>
+        </tbody>
+      </table>
+      <p>这题严格说不算「打」出来的，而是「配」出来的。它需要的操作在真实工作里也很常用——本地调试、上线前验证、复现 CDN 问题，都绕不开 hosts。</p>
+
+      <h2>现象：域名打不开，IP 能打开</h2>
+      <p>题目给了一个域名，要求用它访问靶机。直接打开，浏览器报「无法访问此网站」，连页面都出不来。但把域名换成靶机 IP，页面正常显示。</p>
+      <p>这说明服务和网络都没问题，坏在「域名到 IP」这一步：这个域名在公网 DNS 里查不到，或者压根指向别处。题目为什么要这么设计？因为靶机上很可能用 Host 请求头做判断——只有请求头里的 Host 是那个域名时才返回 flag。用 IP 访问时 Host 就是 IP，条件不成立，所以必须让浏览器「以为」自己在访问那个域名。</p>
+
+      <h2>浏览器把域名变成 IP 的顺序</h2>
+      <p>浏览器解析一个域名，大致按这个顺序找答案：</p>
+      <ul>
+        <li>浏览器自己的 DNS 缓存（Chrome 还有一层内部缓存，<code>chrome://net-internals/#dns</code> 可以清）</li>
+        <li>操作系统 DNS 缓存</li>
+        <li>hosts 文件</li>
+        <li>配置的 DNS 服务器（运营商或公共 DNS），必要时逐级向上问</li>
+      </ul>
+      <p>顺序里有个细节值得记：不同浏览器对 hosts 和自身缓存的先后处理并不完全一致，Chrome 有时会先用自己的缓存。所以改完 hosts 不生效，第一反应应该是清缓存，而不是怀疑自己写错了。这也是我第一次做这题卡住的原因——文件改对了，但浏览器还在用旧结果。</p>
+
+      <h2>改 hosts：一行就够</h2>
+      <p>Windows 的 hosts 文件在 <code>C:\Windows\System32\drivers\etc\hosts</code>，没有扩展名。它需要管理员权限才能改：用管理员身份打开记事本，或者普通记事本改完保存时会有拒绝访问的提示。文件里默认全是 <code>#</code> 开头的注释，在末尾加一行，格式是「IP 空格 域名」：</p>
+      <pre><code class="language-bash">192.168.1.10 flag.bugku.com</code></pre>
+      <p>保存即可。一行可以写多个域名，用空格隔开；但一个域名只能对应一个 IP，写多行只有第一行生效。分隔符用空格或 Tab 都行，写成冒号就错了。</p>
+      <p>Linux 和 macOS 是 <code>/etc/hosts</code>，格式一模一样，改的时候要 sudo：</p>
+      <pre><code class="language-bash">sudo sh -c 'echo "192.168.1.10 flag.bugku.com" &gt;&gt; /etc/hosts'
+cat /etc/hosts | tail -n 3</code></pre>
+      <div class="note">
+        <p>用记事本存 hosts 时注意别存成 hosts.txt。Windows 资源管理器默认隐藏已知扩展名，看起来文件名没变，实际已经多了 .txt，系统不会读它。</p>
+      </div>
+
+      <h2>刷新缓存并验证</h2>
+      <p>改完不一定马上生效，因为系统还缓存着旧结果，连「查不到」这个结论也会被缓存。Windows 下刷新：</p>
+      <pre><code class="language-bash">ipconfig /flushdns
+ping flag.bugku.com
+curl -s -H "Host: flag.bugku.com" http://192.168.1.10/</code></pre>
+      <p>Linux 用 systemd-resolved 的话是 <code>sudo resolvectl flush-caches</code>。ping 能解析到靶机 IP，就说明 hosts 生效了；然后回浏览器用域名访问，拿到 <code>flag{...}</code>。</p>
+      <p>如果还不生效，按这个顺序排查：hosts 那一行有没有写错（IP 和域名之间是空格，不是冒号）、是不是存成了 hosts.txt、浏览器缓存清没清、代理有没有开着——代理可能会自己解析域名，直接绕过 hosts，这种时候关掉代理再试。</p>
+
+      <h2>引申：hosts 劫持</h2>
+      <p>hosts 是个很有用的调试工具，但它也是恶意软件的常见手法。改掉 hosts，把银行、支付、软件更新服务器的域名指向攻击者的 IP，用户地址栏里输入的域名完全正确，打开的却是钓鱼页面，证书告警还常常被用户点掉。整个过程不需要碰 DNS，也不需要用户点任何可疑链接。</p>
+      <p>排查思路就是反过来读这个文件：看有没有不属于自己的条目、DNS 设置有没有被改、用公共 DNS 解析同一个域名做对比。防御上，hosts 应该只有管理员可写，EDR 可以对它的修改行为告警；企业环境里更彻底的做法是把控制放在 DNS 层，而不是指望每台机器的 hosts 都干净。</p>
+      <p>这题本身很小，但它让我第一次真正理解「域名只是给人看的，机器只认 IP」。理解了这句话，再看 Host 头、SNI、证书校验这些东西，就都能串起来了。</p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

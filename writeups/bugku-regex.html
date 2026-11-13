@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku 数字验证正则绕过：preg_match 也有边界 · zhshy</title>
+<meta name="description" content="Bugku 数字验证正则绕过笔记：$ 与换行、数组传参让 preg_match 返回 false、科学计数法与 0x 写法，以及为什么过滤不等于校验。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 数字验证正则绕过：preg_match 也有边界">
+<meta property="og:description" content="正则说「必须是纯数字」，可 PHP 的边界比想象的多。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-regex.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-regex">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">正则绕过</span>
+      <span class="tag">preg_match</span>
+    </div>
+    <h1>Bugku 数字验证正则绕过：preg_match 也有边界</h1>
+    <p class="article-meta">
+      <time datetime="2026-10-20">2026-10-20</time>
+      <span class="dot-sep">·</span>
+      <span>约 8 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      题目用正则判断「你必须是纯数字」，而 PHP 的正则，恰好有几个经典边界。这篇把它们一次讲透。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF · Web</td></tr>
+          <tr><th>类型</th><td>正则校验绕过</td></tr>
+          <tr><th>知识点</th><td>PCRE 的 $ 语义、数组传参、数字字符串</td></tr>
+          <tr><th>目标</th><td>让「不是纯数字」的输入通过 <code>^\d+$</code></td></tr>
+        </tbody>
+      </table>
+
+      <h2>题面：必须是纯数字</h2>
+      <p>
+        页面提示很直白：输入必须全部是数字。提交 <code>abc</code> 会被打回，提交 <code>123</code> 能过第一关，但还不是最终答案。
+        源码大意如下 —— 先用正则卡一遍，再拿值去和一个目标数字比较，两边都过才给 flag：
+      </p>
+      <pre><code class="language-php">&lt;?php
+$num = $_GET['num'] ?? '';
+
+if (!preg_match('/^\d+$/', $num)) {
+    die('必须是纯数字');
+}
+
+if ($num == 2026) {          // 目标值，比赛里通常是别的数
+    echo 'flag{...}';
+} else {
+    echo '数字对了，但不是那个数字';
+}</code></pre>
+      <p>
+        看起来没什么问题：<code>^\d+$</code> 只允许数字，<code>==</code> 再做一次值比较。但这两步各自都有边界，而它们叠在一起时，边界会互相放大。
+      </p>
+
+      <h2>边界一：$ 允许末尾有换行</h2>
+      <p>
+        这是 PCRE 最容易被忘掉的行为：默认模式下，<code>$</code> 不只匹配「字符串结尾」，还匹配「结尾换行符之前」的位置。
+        所以 <code>"2026\n"</code> 能通过 <code>/^\d+$/</code>，尽管它明显不是「纯数字」。
+      </p>
+      <pre><code class="language-bash"># 传 2026 后面跟一个换行（%0a）
+curl "http://靶机/?num=2026%0a"</code></pre>
+      <p>
+        为什么这样还能过第二关？因为 PHP 比较时会把「数字字符串」解释成数字，而数字字符串允许尾随空白：<code>"2026\n" == 2026</code> 成立。
+        两步都过了，但传进去的字符串根本不是我以为的那个「纯数字」。这也是 <code>\z</code>（绝对结尾）和 <code>D</code> 修饰符存在的原因：
+        <code>/^\d+$/D</code> 或 <code>/^\d+\z/</code> 才是真的「一直到结尾」。
+      </p>
+      <p>
+        同样的坑还有 <code>%0d%0a</code>、末尾空格 <code>%20</code>，以及忘了加 <code>m</code> 修饰符导致多行输入被整体匹配的情况。
+      </p>
+
+      <h2>边界二：传数组让 preg_match 返回 false</h2>
+      <p>
+        PHP 的参数天生可以是数组。<code>?num[]=1</code> 传进去，<code>$_GET['num']</code> 就是一个 array，而 <code>preg_match</code> 的第二个参数要求字符串。
+        在 PHP 7 及更早的版本里，它会告警并返回 <code>false</code>；很多题的环境正好是这些老版本，于是校验就这样被「跳过」了。
+      </p>
+      <pre><code class="language-php">&lt;?php
+// 传 num[]=1 时，preg_match 收到的是数组
+var_dump(preg_match('/^\d+$/', $_GET['num']));   // bool(false)
+// 接着 $num == 2026 走的是数组和整数的比较，结果取决于后续代码</code></pre>
+      <p>
+        注意版本差异：PHP 8 对内部函数的字符串参数会直接抛 <code>TypeError</code>，所以这招在新环境里不一定成立。
+        比赛里我会先看响应是「空白 + 500」还是「正常报错」，判断它跑的是哪一代 PHP，再决定用哪条路。
+      </p>
+      <p>
+        还有一个常被忽略的点：<code>preg_match</code> 的返回值有三种 —— 1（匹配）、0（不匹配）、<code>false</code>（出错）。
+        很多代码只写 <code>if (preg_match(...))</code>，出错时返回 <code>false</code> 正好被当成「不匹配」；写成 <code>if (preg_match(...) !== false)</code> 才算认真检查。
+        可惜前一种写法实在太常见了。
+      </p>
+
+      <h2>边界三：数字的「等价写法」</h2>
+      <p>
+        就算正则写得严，只要后面还做类型转换，就有第二套语义。PHP 里这些值的身份常和看起来不一样：
+      </p>
+      <ul>
+        <li><code>"1e3"</code>：<code>is_numeric</code> 认为它是数字（1000），但 <code>\d+</code> 不认它，<code>intval</code> 却只取到 1。</li>
+        <li><code>"0x1A"</code>：PHP 7 起不再当作十六进制数字，<code>is_numeric</code> 返回 false，但 <code>intval("0x1A", 0)</code> 又是 26。</li>
+        <li><code>" 123"</code> / <code>"123 "</code>：前后空格在数字字符串里被容忍，正则不带 <code>D</code> 时也照样放行。</li>
+        <li><code>"0e123"</code>：字符串比较时是「科学计数法的 0」，和另一个 <code>0e...</code> 用 <code>==</code> 比会相等 —— md5 碰撞题的老朋友。</li>
+      </ul>
+      <p>
+        这几种写法说明一件事：<strong>正则匹配的是「文本长得像什么」，不是「这个值是什么」</strong>。同一个输入，在正则眼里是字符串，在 <code>==</code> 眼里是数字，在 <code>intval</code> 眼里又变成另一个数。
+      </p>
+
+      <h2>为什么「过滤」不等于「校验」</h2>
+      <p>
+        过滤的思路是「把危险的东西去掉」，校验是「只接受我认识的东西」。前者永远在列举，后者可以收敛。这题的正则已经算白名单了（只允许数字），但它白名单的是字符，不是「数字这个类型」，于是换行、数组、等价写法都能钻进来。
+      </p>
+      <p>
+        真正的校验应该一步到位：用 <code>filter_var($num, FILTER_VALIDATE_INT)</code> 拿到整数，再做业务比较，而不是先看字符串长得像不像数字。
+      </p>
+      <p>
+        顺带记一个 <code>filter_var</code> 的坑：<code>FILTER_VALIDATE_INT</code> 默认拒绝前导零（<code>"0123"</code> 直接返回 false），也不接受 <code>"1e3"</code> 这种科学计数法，
+        想放宽得自己加 flag。所以「换 filter_var 就安全」也不完全对，关键还是先想清楚「合法输入到底是什么形状」。
+      </p>
+
+      <h2>防御建议</h2>
+      <ul>
+        <li>正则加 <code>D</code> 修饰符或用 <code>\z</code> 收尾，避免 <code>$</code> 放行末尾换行。</li>
+        <li>入口先做类型检查：<code>is_string</code> / <code>is_int</code>，别让数组流进字符串函数。</li>
+        <li>数字一律用 <code>filter_var</code> 加 <code>FILTER_VALIDATE_INT</code>，拿到 <code>int</code> 后再比较。</li>
+        <li>比较用 <code>===</code>，避免 <code>==</code> 的类型 juggling；哈希比较用 <code>hash_equals</code>。</li>
+      </ul>
+
+      <div class="note">
+        <p>本文只记录公开靶场里的学习过程，flag 统一写作 flag{...}。真实站点请勿未授权测试。</p>
+      </div>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

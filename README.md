@@ -141,7 +141,7 @@ powershell -ExecutionPolicy Bypass -File tools\new-writeup.ps1 `
 
 删除 `writeups/xxx.html`，再从 `assets/js/writeups.js` 里删掉对应条目，最后删掉 `sitemap.xml` 里的那条 `<url>`（可选）。三处都删干净，列表和统计才会同步。
 
-> 目前站里一篇文章都没有，`window.WRITEUPS` 是空数组，首页显示的是「还没有发布 writeup」的占位卡片。
+> 目前站里有 30 篇 Bugku 平台的 writeup（Web 23 / Crypto 3 / Misc 2 / Reverse 2），发布日期从 2026-09-20 排到 2026-11-13。所有文章都只写思路和步骤，不含具体 flag 值。
 
 ---
 

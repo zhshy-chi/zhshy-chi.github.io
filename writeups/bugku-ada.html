@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku 啊哒：文件末尾多出来的那段 · zhshy</title>
+<meta name="description" content="Bugku 啊哒 图片隐写笔记：用 file 确认真实类型、binwalk 扫嵌套文件、定位 JPEG 结束标记 FF D9，再用 binwalk -e 或 foremost 分离出藏在尾部的压缩包。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 啊哒：文件末尾多出来的那段">
+<meta property="og:description" content="图片能打开，但比预期大了一截，多出来的字节就是答案。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-ada.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-ada">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Misc</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Misc">Misc</span>
+      <span class="tag">图片隐写</span>
+      <span class="tag">文件尾追加</span>
+    </div>
+    <h1>Bugku 啊哒：文件末尾多出来的那段</h1>
+    <p class="article-meta">
+      <time datetime="2026-11-09">2026-11-09</time>
+      <span class="dot-sep">·</span>
+      <span>约 8 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      图片能正常打开，但文件比预期大了一截。多出来的字节，就是别人不想让你看到的东西。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF</td></tr>
+          <tr><th>类型</th><td>Misc（图片隐写 / 文件结构）</td></tr>
+          <tr><th>知识点</th><td>文件头识别、binwalk、JPEG 结束标记、数据分离</td></tr>
+          <tr><th>flag</th><td>flag{...}</td></tr>
+        </tbody>
+      </table>
+      <p>附件是一张 JPEG。打开完全正常，画面完整，没有任何异样。如果只看图，这题根本无从下手——所以第一步不是看图，而是看文件本身。</p>
+
+      <h2>file 先说话</h2>
+      <p>拿到任何未知文件，我的第一反应都是 <code>file</code>。它读的是文件头魔数，不看扩展名，所以能立刻告诉你「它到底是什么」。这一步看似简单，却能挡掉后面一大半弯路。</p>
+      <pre><code class="language-bash">$ file ada.jpg
+ada.jpg: JPEG image data, JFIF standard 1.01, resolution (DPI), 800x600</code></pre>
+      <p>输出确认它是合法的 JPEG，宽 800、高 600。接着看大小：一张 800x600 的普通照片，压缩后一般几百 KB；如果 <code>ls -l</code> 显示它有 1.2 MB 甚至更大，那这个差值就很可疑了。</p>
+      <p>「是 JPEG」和「只有 JPEG」是两件事。前者说明文件头合法，后者才说明文件里没有别的东西。隐写题经常利用这个认知差：只要文件头合法、结束标记之前的内容完整，图片就能正常打开，而尾部追加的几百 KB 会被大多数解码器直接忽略。</p>
+
+      <h2>binwalk 扫一遍</h2>
+      <p>确认可疑之后，用 binwalk 扫一遍。它的原理是拿一堆已知的文件头签名在文件里做匹配，所以能找出「一个文件里藏了另一个文件」这种情况。</p>
+      <pre><code class="language-bash">$ binwalk ada.jpg
+
+DECIMAL       HEXADECIMAL     DESCRIPTION
+--------------------------------------------------------------------------------
+0             0x0             JPEG image data, JFIF standard 1.01
+126976        0x1F000         Zip archive data, at least v2.0 to extract</code></pre>
+      <p>结果一目了然：偏移 0 是 JPEG，偏移 <code>0x1F000</code> 处出现了一个 Zip 压缩包。也就是说，图片的数据在 0x1F000 之前就结束了，后面挂着一个完整的 zip。</p>
+      <p>要注意 binwalk 给出的偏移只是「疑似」，因为它靠签名匹配，偶尔会有误报。验证方法很简单：用 <code>dd</code> 把那一段切出来，再用 <code>file</code> 看一次。</p>
+      <pre><code class="language-bash">dd if=ada.jpg of=tail.zip bs=1 skip=126976
+file tail.zip</code></pre>
+
+      <h2>看文件尾：FF D9 之后还有什么</h2>
+      <p>JPEG 的结束标记是 <code>FF D9</code>。一个正常的 JPEG，最后两个字节就该是它；如果 <code>FF D9</code> 后面还有内容，那些内容就是纯粹的追加数据，和图片本身没有关系。</p>
+      <p>用十六进制工具翻到文件末尾，或者用脚本找最后一个 <code>FF D9</code> 的位置，都能立刻看出端倪：</p>
+      <pre><code class="language-python">data = open('ada.jpg', 'rb').read()
+
+end = data.rfind(b'\xff\xd9')       # 最后一个 FF D9
+print('结束标记偏移:', hex(end))
+print('文件总长度:', hex(len(data)))
+print('尾部多余字节:', len(data) - end - 2)</code></pre>
+      <p>如果「尾部多余字节」是一个很大的数，那基本可以确认追加了东西。这时再结合 binwalk 给出的偏移，两边一对照，位置就锁定了。两个独立方法互相验证，比只信一个工具踏实得多。</p>
+
+      <h2>分离与提取</h2>
+      <p>最简单的方式是让 binwalk 自己解：<code>binwalk -e ada.jpg</code>，它会把识别到的嵌套文件按偏移切出来，放到一个下划线开头的目录里。foremost 也可以，它按签名做 carving，对图片里嵌压缩包这种情况很稳。</p>
+      <pre><code class="language-bash">binwalk -e ada.jpg
+foremost -i ada.jpg -o out/
+ls out/</code></pre>
+      <p>分离出来的东西可能是 zip，也可能是一段 base64 文本、一个二维码图片。如果是 zip 且提示需要密码，先别急着爆破，看一眼是不是「伪加密」：zip 的通用标志位里有一个 bit 表示「该条目已加密」，把它清零往往就能直接解压。这类小技巧在 Misc 里出现频率很高。</p>
+      <p>解压之后通常就能拿到 flag。如果解出来的是文本，而文本又像某种编码，那就回到编码题的老路：一次剥一层，每层都看一眼输出是否可读。</p>
+
+      <h2>踩坑与复盘</h2>
+      <ul>
+        <li>一开始只看图，没看文件，白白浪费了十几分钟。</li>
+        <li>用 <code>tail -c 200</code> 看末尾，结果看到的是 zip 的压缩数据，二进制乱码，误以为没有东西。</li>
+        <li>直接改扩展名为 .zip 解压失败——因为 zip 不在文件开头，必须有偏移。</li>
+        <li>binwalk 的版本不同，输出格式略有差异，别死记某一行的样子。</li>
+      </ul>
+      <p>复盘下来，这题的核心不是某个工具，而是「文件完整性」这个假设。我们默认「一张图就是一个图片文件」，所以从没想过它后面还能挂东西；但文件格式只规定了「哪里开始、哪里结束」，并没有规定「结束之后不能再写字节」。追加数据破坏了前者之外的约定，却完全不破坏「能打开」这件事。</p>
+
+      <h2>引申：为什么追加数据不会把文件弄坏</h2>
+      <p>大多数图片格式（JPEG、PNG、GIF）的解码器都是「读到结束标记就停」，后面的字节既不校验也不渲染。所以往一张图后面追加任意内容，图片照样能打开，只是文件变大了一点。这个特性被大量用于隐写，也被用于「把压缩包伪装成图片」这种绕过上传检测的手法。</p>
+      <p>防守方的思路也就清楚了：不能只看文件头魔数，还要校验文件长度是否与结构自洽，必要时做二次解码（把图片重新编码一遍），把尾部多余数据直接丢掉。对 CTF 来说，这个知识点叫「文件尾追加」；对真实场景来说，它叫「文件类型检测不能只信魔数」。</p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

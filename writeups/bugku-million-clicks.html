@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku 点击一百万次：前端计数器的骗局 · zhshy</title>
+<meta name="description" content="页面要你点一百万次，但计数逻辑全在浏览器里。记录如何找到真正的计数变量、直接调用提交函数，以及为什么改页面上的数字没用。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 点击一百万次：前端计数器的骗局">
+<meta property="og:description" content="页面要你点一百万次，但计数逻辑全在浏览器里。记录如何找到真正的计数变量、直接调用提交函数，以及为什么改页面上的数字没用。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-million-clicks.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-million-clicks">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">前端绕过</span>
+      <span class="tag">JavaScript</span>
+    </div>
+    <h1>Bugku 点击一百万次：前端计数器的骗局</h1>
+    <p class="article-meta">
+      <time datetime="2026-10-03">2026-10-03</time>
+      <span class="dot-sep">·</span>
+      <span>约 6 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku</span>
+    </p>
+    <p class="article-lead">
+      让你点一百万次，显然不是真让你点。计数逻辑写在前端，就一定有办法跳过去 —— 问题只是找到那个真正参与判断的变量，而不是页面上显示的数字。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF 练习平台</td></tr>
+          <tr><th>类型</th><td>Web / 前端绕过</td></tr>
+          <tr><th>知识点</th><td>JavaScript 变量、控制台调试、DOM 与状态分离</td></tr>
+          <tr><th>工具</th><td>浏览器 F12</td></tr>
+        </tbody>
+      </table>
+
+      <h2>页面现象：一百万次的进度条</h2>
+      <p>
+        打开页面，正中一个按钮，下面一行文字写着「你已经点击了 0 次」，再往下是一条进度条。随便点几下，数字会加，进度条会动，手感上像是真的在计数。但按钮旁边还写了句「目标：1000000 次」。
+      </p>
+      <p>
+        这就是典型的「用体力替代思考」的题面。一百万次点击，就算手速再快也要按上几个小时，出题人显然不指望你真点。真正要问的是：这个数字存在哪里？它凭什么决定我能不能拿到 flag？
+      </p>
+
+      <h2>找到真正的计数变量</h2>
+      <p>
+        先看源码。页面没混淆，<code>&lt;script&gt;</code> 里能看到一个全局变量，大概叫 <code>clicks</code>，初值为 <code>0</code>，按钮的点击事件里做 <code>clicks++</code>，同时更新页面上那个 <code>span</code> 的文本。关键的一点是：这个变量的作用域在 <code>window</code> 上，控制台可以直接读写它。
+      </p>
+      <pre><code class="language-bash">// F12 控制台里直接改全局变量
+clicks = 999999
+
+// 或者一步到位
+clicks = 1000000
+
+// 再点一下按钮，让它自己走完更新和提交逻辑
+document.querySelector('button').click()</code></pre>
+      <p>
+        改完变量再点一次按钮，页面上的数字会直接跳到一百万，然后触发提交。这一步之所以成立，是因为计数、显示、提交这三件事共用同一个变量，只要把源头改掉，后面全都会跟着变。
+      </p>
+
+      <h2>直接调用它的提交函数</h2>
+      <p>
+        如果不想绕按钮，也可以顺着源码找提交函数。这类题一般会把「判断是否达标」和「发请求」写在一个函数里，比如 <code>submit()</code>、<code>check()</code>、<code>postFlag()</code> 之类。找到函数名之后，在控制台里直接调：
+      </p>
+      <pre><code class="language-bash">// 先看看 window 上有哪些可疑函数
+Object.keys(window).filter(k =&gt; typeof window[k] === 'function')
+
+// 找到后直接调用，跳过点击
+submit()</code></pre>
+      <p>
+        如果函数里带了判断（比如 <code>if (clicks &lt; 1000000) return;</code>），先把 <code>clicks</code> 改大再调用，两招组合起来基本通杀。再退一步，还可以在 Sources 面板里给判断那一行下断点，命中的时候在 Scope 里手动改值，效果一样，只是更慢。
+      </p>
+
+      <h2>为什么改页面上的数字没用</h2>
+      <p>
+        这是这道题最容易踩的坑。新手的第一反应往往是在 Elements 面板里双击那个 <code>0</code>，改成 <code>1000000</code>，页面上确实显示一百万了 —— 然后点提交，什么也没发生。原因很简单：Elements 改的是 DOM 文本，而判断读的是 JavaScript 变量，两者只是被代码单向同步过，你把显示改掉，变量根本没动。
+      </p>
+      <p>
+        更麻烦的是，下一次点击事件触发时，代码会用变量的值重新渲染一遍 <code>span</code>，你改的数字当场被打回原形。所以判断一个「前端校验」能不能绕，先分清它读的是 DOM 还是内存里的状态：读 DOM 的，改 DOM 就够；读变量的，必须动变量。
+      </p>
+
+      <h2>提交与后端校验</h2>
+      <p>
+        数字凑够之后点提交，前端会把结果打包成一个请求发出去。抓包能看到大概长这样：<code>POST /flag.php</code>，body 里带一个 <code>clicks=1000000</code> 之类的字段。服务端拿到这个数字，只要大于等于阈值就把 flag 返回。
+      </p>
+      <p>
+        也就是说，整个「一百万次」的约束从头到尾都只是客户端的自觉，服务端并没有真的统计过点击次数 —— 它相信了浏览器报上来的数字。这意味着即使不改 JS，直接用 Burp 重放这个 POST，把 <code>clicks</code> 改成一百万，一样能过。两条路殊途同归，本质都是「约束没有落在服务端」。
+      </p>
+
+      <div class="note">
+        <p>判断一个校验值不值钱，只看一件事：把浏览器完全绕过、直接构造请求，它还拦不拦得住。拦不住，那它只是 UI 的一部分。</p>
+      </div>
+
+      <h2>踩坑与复盘</h2>
+      <ul>
+        <li>一开始在 Elements 里改了显示的数字，点提交毫无反应，卡了十分钟才想到看 JS。</li>
+        <li>改完 <code>clicks</code> 后忘了再点一次按钮，页面没触发提交流程，以为方法不对；其实变量改了，但提交逻辑还没跑。</li>
+        <li>后来发现直接重放 POST 更省事，也顺手验证了后端确实没有独立计数。</li>
+      </ul>
+
+      <h2>防御建议</h2>
+      <p>
+        任何「次数」「额度」「进度」类限制，都必须由服务端记录和判断，前端只负责展示。服务端要按会话或用户维度维护计数，并且对提交上来的值一概不信 —— 客户端传来的数字只能当提示，不能当依据。另外，提交接口要做频率限制和幂等处理，避免有人用脚本把请求刷成真正的「一百万次」。
+      </p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

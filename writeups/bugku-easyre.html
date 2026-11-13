@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku Easy_Re：题目名字已经在提示你了 · zhshy</title>
+<meta name="description" content="Bugku Easy_Re 逆向笔记：file、strings、IDA 三步静态分析，在 Hex View 里翻出可读字符串，判断循环异或的比较逻辑，用 Python 把常量还原成明文并本地验证。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku Easy_Re：题目名字已经在提示你了">
+<meta property="og:description" content="逻辑简单得可疑，因为答案就摆在常量里。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-easyre.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-easyre">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Reverse</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Reverse">Reverse</span>
+      <span class="tag">IDA</span>
+      <span class="tag">Hex View</span>
+    </div>
+    <h1>Bugku Easy_Re：题目名字已经在提示你了</h1>
+    <p class="article-meta">
+      <time datetime="2026-11-13">2026-11-13</time>
+      <span class="dot-sep">·</span>
+      <span>约 8 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      拖进 IDA，F5 之后逻辑简单得可疑 —— 因为这题根本没打算让你算，答案就摆在常量里。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF</td></tr>
+          <tr><th>类型</th><td>Reverse（静态分析）</td></tr>
+          <tr><th>知识点</th><td>IDA、Hex View、strcmp、循环异或</td></tr>
+          <tr><th>flag</th><td>flag{...}</td></tr>
+        </tbody>
+      </table>
+      <p>附件同样是一个 Linux 可执行文件。题目名叫 Easy_Re，语气已经很直白了：不要想复杂，先找找有没有现成的东西。果然，整个程序的核心逻辑只有十几行。</p>
+
+      <h2>静态分析三步：file、strings、IDA</h2>
+      <p>流程还是老三样，但每一遍看的东西不一样。第一步 <code>file</code> 确认平台和是否 stripped；第二步 <code>strings</code> 找可读文本；第三步才进 IDA 看控制流。</p>
+      <pre><code class="language-bash">$ file Easy_Re
+Easy_Re: ELF 64-bit LSB executable, x86-64, dynamically linked, not stripped
+
+$ strings -n 6 Easy_Re | grep -iE 'flag|right|wrong|input'</code></pre>
+      <p>strings 的输出里能看到 <code>input your flag:</code> 之类的提示，还有 <code>you are right</code>、<code>try again</code> 这样的反馈字符串。这些信息很有价值：它们告诉你程序的行为是「读入一行、比较、给出对错」，而不是「输出一段密文让你解」。</p>
+      <p>知道程序有比较，就知道该找比较点。这一步省下来的时间比想象中多——很多人一进 IDA 就从 <code>_start</code> 开始逐行读，读到 main 的循环已经耗掉一半耐心。</p>
+
+      <h2>Hex View 里翻可读字符串</h2>
+      <p>这题有个细节值得单独说：IDA 的字符串窗口里并没有出现 flag 明文，但程序里确实存了一段字节。原因可能是这段字节没有被当成字符串引用，而是被当作数组逐字节访问，IDA 的自动字符串识别就没把它标出来。</p>
+      <p>所以除了字符串窗口，还要会看 Hex View。在 IDA 里通过 <code>View</code> 菜单打开 <code>Open subviews</code> 里的 <code>Hex dump</code>，跳到 <code>.rodata</code> 段，按字节往下翻。肉眼找 ASCII 其实不难：可打印字符在十六进制里集中在 0x20 到 0x7E，看上去就是一段「有规律的数字」，旁边通常还跟着一串 <code>00</code>。</p>
+      <p>如果嫌翻页慢，可以先把二进制里的可打印串整体导出再搜：</p>
+      <pre><code class="language-bash">strings -a -n 4 Easy_Re | grep -n 'flag'
+# 或者直接看 .rodata 段
+objdump -s -j .rodata Easy_Re | head -40</code></pre>
+
+      <h2>判断比较逻辑</h2>
+      <p>进 main、按 F5，伪代码大致是这样：读入字符串，取长度，然后一个循环，把输入的每个字节和某个常量数组比较；循环外根据结果打印成功或失败。</p>
+      <pre><code class="language-text">v3 = strlen(input);
+if ( v3 != 8 ) {
+    puts("try again");
+    return 0;
+}
+for ( i = 0; i &lt; 8; ++i ) {
+    if ( (input[i] ^ 0x2A) != enc[i] ) {
+        puts("try again");
+        return 0;
+    }
+}
+puts("you are right");</code></pre>
+      <p>这段逻辑的判定点非常明确：<code>input[i] ^ 0x2A == enc[i]</code>。异或有一个很好的性质——它是对称的，<code>a ^ k = b</code> 就有 <code>b ^ k = a</code>。所以不需要「解方程」，只要把 <code>enc</code> 里的每个字节再异或一次 0x2A，就能得到原文。</p>
+      <p>另一种更常见的形式是直接 <code>strcmp(input, "....")</code>。那种情况连脚本都不用写，双击常量看值，或者按 <code>a</code> 把它转成字符串就行。判断依据是：看到 <code>strcmp</code> 就去找第二个参数；看到循环逐字节比较，就去找那个常量数组和参与运算的 key。</p>
+
+      <h2>用 python 还原常量</h2>
+      <p>把 <code>enc</code> 数组抄出来，写三行脚本即可。抄的时候建议直接从 IDA 的数据视图复制，别手打，错一个字节就会得到一串看起来像答案的乱码。</p>
+      <pre><code class="language-python">enc = [0x4C, 0x46, 0x4B, 0x4D, 0x51, 0x45, 0x41, 0x57]
+
+plain = ''.join(chr(b ^ 0x2A) for b in enc)
+print(plain)        # flag</code></pre>
+      <p>这段输出只是前半段，完整的 flag 还要把后半段的常量按同样方式处理，最后拼成 <code>flag{...}</code> 的形式。真实内容这里就不贴了，反正思路是一样的。</p>
+      <p>如果没有异或、只是单纯存了一份字节数组再 <code>memcmp</code>，那就更简单：把字节按 ASCII 解码即可。反过来，如果比较前还做了加减、位移、ROT13 之类的变换，就按逆运算写回去——异或、加减、取反都是可逆的，位移丢位时要小心。</p>
+
+      <h2>验证：本地跑一遍</h2>
+      <p>静态分析最怕「看起来对」。所以拿到还原结果之后，一定要跑一次程序验证。<code>chmod +x</code> 加执行权限，在 Linux 或 WSL 里跑，输入还原出来的字符串，看它是否输出 <code>you are right</code>。</p>
+      <pre><code class="language-bash">chmod +x Easy_Re
+./Easy_Re
+# input your flag:
+# flag{...}
+# you are right</code></pre>
+      <p>如果报错，先检查三件事：长度是否和程序校验的一致；有没有把不可打印字符也拼进去；字节序是不是搞反了。这三条几乎覆盖了新手九成的失败原因。</p>
+      <p>顺便说一句，能运行就尽量运行。很多人只做静态分析，结果抄错一个字节，在错误的答案上花了半小时。跑一次只要十几秒，却能立刻告诉你是「思路错了」还是「抄错了」。</p>
+
+      <h2>引申：逆向不是看懂全部</h2>
+      <p>这题最想教的其实是取舍。程序里有几百个函数，绝大多数是 libc 和编译器的产物，你只需要看懂一个比较点。真实的逆向工作也是这样：先定位关键逻辑——输入在哪里、比较在哪里、输出在哪里——再围绕这几个点逐层展开，而不是从第一行读到最后一行。</p>
+      <p>把「找关键点」变成习惯之后，题目再长也不会慌：先 file，再 strings，再找 main，再找 compare，最后验证。这个循环跑熟了，Easy_Re 这样的题就是五分钟的事，省下的时间可以去看真正复杂的算法和混淆。</p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

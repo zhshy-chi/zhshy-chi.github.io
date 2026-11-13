@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku 矛盾：is_numeric 与弱类型比较 · zhshy</title>
+<meta name="description" content="一道要求「既不是数字又等于 1」的 PHP 题，从 is_numeric 与 == 的语义差异讲起，顺带说清 PHP 8 之后比较规则的变化。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 矛盾：is_numeric 与弱类型比较">
+<meta property="og:description" content="一道要求「既不是数字又等于 1」的 PHP 题，从 is_numeric 与 == 的语义差异讲起，顺带说清 PHP 8 之后比较规则的变化。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-maodun.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-maodun">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">PHP弱类型</span>
+      <span class="tag">is_numeric</span>
+    </div>
+    <h1>Bugku 矛盾：is_numeric 与弱类型比较</h1>
+    <p class="article-meta">
+      <time datetime="2026-10-01">2026-10-01</time>
+      <span class="dot-sep">·</span>
+      <span>约 8 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku</span>
+    </p>
+    <p class="article-lead">
+      题目想让我传个数字，又不让我传数字 —— 这种自相矛盾的条件，通常意味着它在用「弱类型」。这篇笔记从一段两行判断的源码出发，把 <code>is_numeric()</code> 和 <code>==</code> 的两套语义拆开看。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF 练习平台</td></tr>
+          <tr><th>类型</th><td>Web / PHP 代码审计</td></tr>
+          <tr><th>知识点</th><td>PHP 弱类型、is_numeric、松散比较、PHP 8 版本差异</td></tr>
+          <tr><th>环境</th><td>PHP 5.6 / PHP 7，本地另起 PHP 8 做对照</td></tr>
+        </tbody>
+      </table>
+
+      <h2>题面：先看这段矛盾的代码</h2>
+      <p>
+        题目给了几行源码，逻辑短得一眼能看完：先取 <code>$_GET['num']</code>，然后做两次判断。第一次，如果 <code>is_numeric($num)</code> 为真，就 <code>die()</code> 掉，提示「不能是数字」；第二次，如果 <code>$num == 1</code> 为真，就输出 flag。
+      </p>
+      <pre><code class="language-php">&lt;?php
+$num = $_GET['num'];
+if (is_numeric($num)) {
+    die('num 不能是数字');
+}
+if ($num == 1) {
+    echo 'flag{...}';
+}
+?&gt;</code></pre>
+      <p>
+        第一次读完我是有点懵的：它既要一个不是数字的东西，又要这个东西等于 1。按正常人的直觉，这题像是出错了。但在 CTF 里碰到这种「自相矛盾」，基本可以反过来理解 —— 出题人不是在为难你，而是在提示你：这两个判断对「数字」的理解不是同一套规则，中间一定有缝隙。
+      </p>
+
+      <h2>PHP 的弱类型比较到底怎么比</h2>
+      <p>
+        PHP 是弱类型语言，<code>==</code> 是松散比较，比较之前会先做类型转换。在 PHP 5 和 PHP 7 里，当一个字符串和一个数字用 <code>==</code> 比较时，字符串会被转成数字再比。转换规则非常宽松：从字符串开头开始读，能读成数字的部分就当作结果，遇到第一个不能构成数字的字符就停下，后面的内容直接忽略。
+      </p>
+      <p>
+        所以 <code>"1abc"</code> 会被转成 <code>1</code>，<code>"1.0abc"</code> 会被转成 <code>1.0</code>，<code>"1e3abc"</code> 会按科学计数法转成 <code>1000</code>。反过来，<code>is_numeric()</code> 检查的是整个字符串的字面形状：从头到尾必须是一个合法的数字写法，<code>"1abc"</code> 里带着字母，它直接返回 <code>false</code>。一个看「像不像数字」，一个看「转成数字后是多少」，这就是全部矛盾来源。
+      </p>
+
+      <h2>为什么 1abc 能同时骗过两个判断</h2>
+      <p>
+        把两条规则代进题面：<code>is_numeric("1abc")</code> 是 <code>false</code>，第一个 <code>if</code> 不成立，程序继续往下走；接着 <code>"1abc" == 1</code>，字符串先被转成 <code>1</code>，<code>1 == 1</code> 成立，flag 就打印出来了。同一个输入，在两个判断里被解释成了两个不同的东西。所以这道题真正要记的不是 payload，而是这个习惯：看到校验函数和使用点不是同一个函数，就去想它们对同一个值的理解会不会不一致。
+      </p>
+
+      <h2>利用过程</h2>
+      <p>
+        知道了原理，payload 就没什么技术含量了，直接拼在查询串里：
+      </p>
+      <pre><code class="language-bash">curl "http://靶机地址/?num=1abc"</code></pre>
+      <p>
+        浏览器里访问 <code>?num=1abc</code> 也一样能拿到结果。为了确认自己不是碰巧撞对的，我又把 <code>?num=1</code>、<code>?num=abc</code>、<code>?num=1.0abc</code> 各发了一遍：传纯数字被第一关拦下，传纯字母在第二关失败，只有「数字开头、后面跟垃圾字符」的写法能过去。这一步对照实验很重要，它能证明你理解的是规则，而不是背下了一个答案。
+      </p>
+
+      <h2>PHP 8 之后的版本差异</h2>
+      <p>
+        这题在 PHP 8 上会直接失效，原因值得单独记一笔。PHP 8 收紧了「字符串与数字比较」的规则：当数字和一个非数字字符串比较时，不再把字符串转成数字，而是把数字转成字符串，然后按字符串比较。于是 <code>1 == "1abc"</code> 变成了 <code>"1" == "1abc"</code>，结果是 <code>false</code>，payload 当场死掉。同样地，PHP 7 里 <code>0 == "abc"</code> 为真的经典怪癖，在 PHP 8 里也变成了 <code>false</code>。
+      </p>
+      <p>
+        另一个容易混的点是 <code>is_numeric()</code> 自己的变化：从 PHP 8.0 开始，字符串末尾的空白字符被允许，<code>is_numeric("1 ")</code> 返回 <code>true</code>。但这在本题里帮不上忙 —— 它让第一关直接成立，反而更过不去。所以看到这类题，第一件事应该是确认靶机的 PHP 版本，版本不对，思路就得整个换掉。
+      </p>
+
+      <div class="note">
+        <p>记住一句话：弱类型题的答案往往不在 payload 里，而在「哪个函数解释了这个值」里。换版本等于换规则，先问环境再动手。</p>
+      </div>
+
+      <h2>踩坑与复盘</h2>
+      <ul>
+        <li>一开始试了 <code>?num[]=1</code>，想用数组绕过 <code>is_numeric</code>，结果数组和 1 比较也是 false，白忙一场。</li>
+        <li>试过 <code>?num=1%20</code>，在 PHP 5 里 <code>is_numeric("1 ")</code> 是 false，但第二关能过；可惜我当时在 PHP 8 环境里测，两关都过不去，绕了很久才想起看版本。</li>
+        <li>最后确认：这题吃的就是 PHP 5/7 的松散比较，理解规则比记 payload 有用得多。</li>
+      </ul>
+
+      <h2>防御建议</h2>
+      <p>
+        写代码时，如果某个值要当数字用，就别先把它当字符串校验一遍再丢进比较里。统一用 <code>is_numeric()</code> 加 <code>intval()</code> 转换，比较时用 <code>===</code> 而不是 <code>==</code>，让「校验」和「使用」落在同一个类型上。另外，升级到 PHP 8 能消掉一大批这类历史怪癖，但别把它当成修复手段 —— 代码里该收紧的地方还是得收紧。
+      </p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

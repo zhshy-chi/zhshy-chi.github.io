@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku 入门逆向：第一眼看汇编 · zhshy</title>
+<meta name="description" content="Bugku 入门逆向笔记：从 file 看架构、strings 找线索，到 IDA 里定位 main，识别一串 mov 到栈上的十六进制立即数，把它们还原成 flag 字符串。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 入门逆向：第一眼看汇编">
+<meta property="og:description" content="满屏 mov 和 call，其实只要认出 66h 6ch 61h 67h 就够了。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-reverse1.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-reverse1">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Reverse</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Reverse">Reverse</span>
+      <span class="tag">IDA</span>
+      <span class="tag">静态分析</span>
+    </div>
+    <h1>Bugku 入门逆向：第一眼看汇编</h1>
+    <p class="article-meta">
+      <time datetime="2026-11-11">2026-11-11</time>
+      <span class="dot-sep">·</span>
+      <span>约 9 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      第一次把程序拖进 IDA，满屏 mov 和 call。其实这题只要认出 66h 6ch 61h 67h 就够了，剩下的都是编译器帮忙生成的东西。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF</td></tr>
+          <tr><th>类型</th><td>Reverse（静态分析）</td></tr>
+          <tr><th>知识点</th><td>file、strings、IDA 反编译、栈上立即数、ASCII</td></tr>
+          <tr><th>flag</th><td>flag{...}</td></tr>
+        </tbody>
+      </table>
+      <p>附件是一个 Linux 可执行文件。题目名就叫「入门逆向」，所以它不会在算法上为难人，重点是把「怎么开始看一个程序」这件事演示一遍。我第一次打开它的时候完全不知道该看哪儿，下面按我实际的顺序记录。</p>
+
+      <h2>file 与 strings：两个不花钱的步骤</h2>
+      <p>在打开反编译工具之前，先用两个命令收集信息。它们只要几秒钟，但能决定你后面要看什么。</p>
+      <pre><code class="language-bash">$ file reverse1
+reverse1: ELF 64-bit LSB executable, x86-64, version 1 (SYSV),
+dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, not stripped
+
+$ strings -n 6 reverse1 | head -40</code></pre>
+      <p><code>not stripped</code> 是个好消息：符号表还在，函数名是 <code>main</code> 而不是 <code>sub_4006D6</code>，在 IDA 左侧的函数窗口里可以直接跳过去。如果是 <code>stripped</code>，就要从入口点 <code>_start</code> 里找 <code>__libc_start_main</code> 的第一个参数，多绕一步。</p>
+      <p>strings 这题没有直接给出答案，只看到一些编译器生成的版本号、GCC 的报错字符串、libc 的函数名。这也正常——如果 flag 以标准字符串的形式存在，<code>strings | grep flag</code> 就结束了，题目不会这么出。但这一步仍然值得做，因为它能把「有线索」和「没线索」区分开。</p>
+
+      <h2>拖进 IDA，找到 main</h2>
+      <p>IDA 打开后默认停在程序入口，不是 main。左侧函数窗口里搜 <code>main</code>，双击进去，然后按 F5 生成伪代码。对于新手来说，伪代码比汇编好读太多，先看伪代码建立整体印象，再回汇编看细节，是更省力的路径。</p>
+      <p>这题的 main 异常短。伪代码里能看到一串对局部数组的逐字节赋值，紧接着把这个数组的地址传给输出函数。回到汇编视图，就是连续的一串 <code>mov</code>，把立即数一个字节一个字节写到栈上的连续位置：</p>
+      <pre><code class="language-text">mov     byte ptr [rbp-20h], 66h
+mov     byte ptr [rbp-1Fh], 6Ch
+mov     byte ptr [rbp-1Eh], 61h
+mov     byte ptr [rbp-1Dh], 67h
+mov     byte ptr [rbp-1Ch], 7Bh
+mov     byte ptr [rbp-1Bh], 2Dh
+mov     byte ptr [rbp-1Ah], 2Dh
+...
+lea     rax, [rbp-20h]
+mov     rdi, rax
+call    puts</code></pre>
+      <p>看到这种「地址连续、每次减一、值是两位十六进制」的模式，就应该想到：这是在拼一个字符串。编译器把 <code>char s[] = "..."</code> 这种短字符串初始化，优化成了逐字节写入，而不是放在 .rodata 里。所以 strings 找不到它，但它在栈上完完整整地存在。</p>
+
+      <h2>一串 mov：立即数就是字符</h2>
+      <p>66h、6Ch、61h、67h 单独看没有意义，但它们落在 ASCII 的可打印范围内。0x66 是 'f'，0x6C 是 'l'，0x61 是 'a'，0x67 是 'g'。连起来就是 flag 的开头，说明方向完全正确。</p>
+      <p>接下来要做的只是把这一串立即数按顺序抄下来。抄的时候注意两点：一是顺序，栈地址从低到高，<code>rbp-20h</code> 比 <code>rbp-1Fh</code> 更靠近低地址，所以按地址递增的顺序拼；二是别漏字节，中间如果出现 <code>00h</code>，那是字符串的结束符，不是内容。</p>
+      <p>伪代码里其实更直观：IDA 会把它显示成 <code>v4[0] = 0x66;</code> 这样的赋值序列，或者干脆识别成 <code>char v4[24] = "flag..."</code>。如果 F5 直接给出了字符串，那连转换都省了；这题我第一次按 F5 时只看到数组赋值，说明 IDA 没有把它识别成字符串常量。</p>
+
+      <h2>十六进制还原成字符串</h2>
+      <p>把字节序列转成字符串，最省事的是 Python。四个字节也好，四十个字节也好，写法都一样：</p>
+      <pre><code class="language-python">nums = [0x66, 0x6C, 0x61, 0x67]
+print(''.join(chr(n) for n in nums))      # flag</code></pre>
+      <p>如果字节很多，从 IDA 里一个个抄太慢，可以直接把汇编选中复制成一个文本文件，用正则批量提取 <code>6Ch</code> 这种两位十六进制：</p>
+      <pre><code class="language-python">import re
+
+asm = open('main.asm', encoding='utf-8').read()
+nums = [int(x, 16) for x in re.findall(r'([0-9A-Fa-f]{2})h', asm)]
+print(bytes(nums).decode('latin-1'))</code></pre>
+      <p>用 <code>latin-1</code> 解码是为了稳妥：字节序列里偶尔会混进不可打印字符，用 utf-8 解码可能直接抛异常，而 latin-1 能一对一映射，不会丢信息。看清楚之后再决定怎么裁剪。</p>
+
+      <h2>复盘：逆向的第一次胜利</h2>
+      <ul>
+        <li>先 file 再看架构，避免在错误的工具上浪费时间。</li>
+        <li>strings 没结果不代表没线索，只是线索不在字符串表里。</li>
+        <li>看到连续 mov 加 <code>lea</code> 取地址，先想「这是不是在拼字符串」。</li>
+        <li>两位十六进制加 h 结尾，几乎一定是 ASCII 或机器码，先试着当字符看。</li>
+      </ul>
+      <p>这道题给我的最大收获不是 flag，而是「读程序可以从中间开始」。以前我总觉得逆向必须从第一行读到最后一行，实际上可以先找输出、找比较、找可疑常量，再往回推。这题就是典型的「常量即答案」：程序没有任何输入，也没有校验逻辑，它只是把一段数据打出来而已。</p>
+      <p>顺带一提，这类静态题不需要运行程序。如果程序是 Linux 的 ELF，在 Windows 上跑还得装 WSL 或虚拟机，静态分析反而更省事。等遇到需要动态验证的题（比如带反调试、需要跟踪运行时内存），再上 gdb 或 x64dbg 也不迟。</p>
+
+      <h2>引申：逆向第一步永远是先看字符串和常量</h2>
+      <p>真实的逆向工程里，字符串往往是最快的突破口：报错信息、路径、URL、加密库的名字、版本号，都能帮你快速判断程序用了什么技术栈。即使字符串被混淆或加密，字符串的「引用位置」也仍然是重要的锚点——谁在读它、读完之后做了什么，比字符串本身更有价值。</p>
+      <p>把这条习惯固定下来：file 看类型，strings 看线索，IDA 看逻辑，最后才是动态调试。每一步都有明确的产出，卡住的时候也知道该退回哪一步，而不是对着满屏汇编发呆。</p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku 前女友：strcmp 的返回值陷阱 · zhshy</title>
+<meta name="description" content="Bugku 前女友题笔记：strcmp 遇数组返回 NULL，NULL==0 成立，以及为什么字符串比较要用 === 和 hash_equals。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 前女友：strcmp 的返回值陷阱">
+<meta property="og:description" content="strcmp 在 5.3 之后遇到数组会返回 NULL，而 NULL == 0 成立。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-exgirlfriend.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-exgirlfriend">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">strcmp</span>
+      <span class="tag">数组绕过</span>
+    </div>
+    <h1>Bugku 前女友：strcmp 的返回值陷阱</h1>
+    <p class="article-meta">
+      <time datetime="2026-10-22">2026-10-22</time>
+      <span class="dot-sep">·</span>
+      <span>约 7 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      代码里写着 if(strcmp($a,$b)==0)，看起来密不透风，但 strcmp 在 5.3 之后遇到数组会返回 NULL。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF · Web</td></tr>
+          <tr><th>类型</th><td>strcmp 返回值滥用 / 数组绕过</td></tr>
+          <tr><th>知识点</th><td>strcmp 语义、NULL == 0、松散比较</td></tr>
+          <tr><th>目标</th><td>让 <code>strcmp($a, $b) == 0</code> 成立却不给出正确答案</td></tr>
+        </tbody>
+      </table>
+
+      <h2>题面：一句 strcmp 判等</h2>
+      <p>
+        题目只有一句话：「猜猜前女友的名字」。输入框提交后，代码把我和答案做一次字符串比较，相等就输出 flag。
+        源码大概长这样，短得让人无从下手：
+      </p>
+      <pre><code class="language-php">&lt;?php
+$answer = '一个我也不知道的名字';   // 服务端保存的正确答案
+
+if (isset($_GET['name'])) {
+    $name = $_GET['name'];
+    if (strcmp($name, $answer) == 0) {
+        echo 'flag{...}';
+    } else {
+        echo '你不是他';
+    }
+}</code></pre>
+      <p>
+        名字我猜不到，爆破也不现实。但这段代码有个细节值得盯：比较的是 <code>strcmp()</code> 的返回值，而不是两个字符串本身；
+        而返回值是用 <code>== 0</code> 判的，不是 <code>=== 0</code>。这两个「不是」就是入口。
+      </p>
+
+      <h2>strcmp 的语义与那个 NULL</h2>
+      <p>
+        <code>strcmp($a, $b)</code> 的约定是：相等返回 0，<code>$a</code> 大返回正数，<code>$b</code> 大返回负数。听起来很干净，但它的参数类型是 <code>string</code>。
+        如果我传一个数组进去，PHP 在 5.3 之后的版本里会告警「expects parameter 1 to be string, array given」，然后返回 <code>NULL</code>。
+      </p>
+      <pre><code class="language-php">&lt;?php
+var_dump(strcmp(array('x'), 'abc'));   // NULL，并伴随一条 Warning
+var_dump(NULL == 0);                   // bool(true)
+var_dump(NULL === 0);                  // bool(false)</code></pre>
+      <p>
+        关键就是最后两行。PHP 的 <code>==</code> 是松散比较，<code>NULL</code> 会被当成「空值」处理，和整数 0 比较时结果为 true。
+        于是 <code>strcmp(数组, 字符串) == 0</code> 成立 —— 我根本不需要知道答案是什么。
+      </p>
+      <p>
+        再补一句 PHP 的松散比较表：<code>NULL == false</code>、<code>NULL == ""</code>、<code>NULL == 0</code>、<code>NULL == array()</code> 全都为 true。
+        也就是说 <code>strcmp()</code> 只要返回 NULL，不管代码拿它跟 0、false 还是空字符串比，都会「相等」。这就解释了为什么有些题把判断写成
+        <code>if (!strcmp(...))</code>，照样被数组打穿。
+      </p>
+
+      <h2>利用：把参数变成数组</h2>
+      <p>
+        HTTP 参数名后面加一对中括号，PHP 就会把它解析成数组。这是整题唯一需要记的 payload 形状：
+      </p>
+      <pre><code class="language-bash">curl "http://靶机/?name[]=whatever"
+# 响应：flag{...}</code></pre>
+      <p>
+        <code>$_GET['name']</code> 现在是一个 <code>array('whatever')</code>，<code>strcmp()</code> 收到数组返回 <code>NULL</code>，
+        <code>NULL == 0</code> 为真，判断通过。整个链条里没有任何一步需要我知道「前女友」叫什么。
+      </p>
+      <p>
+        如果两边都由我控制，形状还会更简单：<code>?v1[]=x&amp;v2[]=y</code>，两个参数都变成数组，<code>strcmp()</code> 各返回一个 <code>NULL</code>，
+        <code>NULL == NULL</code> 依然成立。这种「两次输入必须一致」的题（确认密码、确认 token）基本都是同一个套路。
+      </p>
+      <p>
+        顺带说一句版本差异：PHP 8 对内部函数的字符串参数会直接抛 <code>TypeError</code>，这招在新版本上会变成 500。
+        所以看到「本地能打、线上 500」时，先确认目标 PHP 版本，而不是怀疑 payload 写错了。
+      </p>
+
+      <h2>另一条路：哈希比较的 == 与 ===</h2>
+      <p>
+        这题还有一个「同父异母」的考点：如果代码不比 <code>strcmp</code>，而是比哈希，比如 <code>if (md5($a) === md5($b))</code>，
+        那就轮不到 NULL 出场，得换思路 —— 传数组让 <code>md5()</code> 返回 <code>NULL</code>，两个 <code>NULL</code> 用 <code>===</code> 比也是相等的。
+        这正好说明 <code>===</code> 也不是万能的：它保证类型一致，但保证不了「函数真的返回了一个哈希」。
+      </p>
+      <p>
+        如果代码写的是 <code>md5($a) == md5($b)</code>，还有经典的 <code>0e</code> 碰撞：两个不同的字符串，md5 值都是 <code>0e</code> 开头且后面全是数字，
+        松散比较时都被当成 0。这跟 <code>NULL == 0</code> 是同一类问题的不同皮肤：<strong>松散比较把「不同的东西」判成了相等</strong>。
+      </p>
+      <p>
+        真实代码里这种写法并不罕见：有人用 <code>strcmp($token, $expected)</code> 比 API token，有人用 <code>==</code> 比两个哈希。
+        平时看不出问题，一旦参数能传成数组（比如把 JSON 解析结果直接丢进去），判断就静默失效 —— 没有报错、没有日志，只有一次成功的越权。
+      </p>
+
+      <h2>踩坑记录</h2>
+      <ul>
+        <li>一开始传 <code>?name=</code> 空字符串，没用 —— <code>strcmp('', $answer)</code> 返回的是非零值。</li>
+        <li>试过在字符串里塞 <code>\0</code> 或者超长串，思路跑偏了；这题的入口在「类型」，不在「内容」。</li>
+        <li>浏览器里手敲 <code>?name[]=x</code> 有时会被转义成 <code>%5B%5D</code>，这不影响，PHP 一样解析成数组。</li>
+        <li>如果页面把 Warning 显示出来了，会看到 <code>strcmp() expects parameter 1 to be string, array given</code>，别急着关掉报错，它其实在告诉你「函数收到了错误类型」。</li>
+        <li>本地复现只要三行：用 <code>php -r</code> 跑一下 <code>var_dump(strcmp([], 'x'))</code>，就能看到 NULL 和那条 Warning。先在本地验证语义，比在靶机上盲试快得多。</li>
+      </ul>
+
+      <h2>防御建议</h2>
+      <ul>
+        <li>比较字符串用 <code>===</code>，并且先确认两侧都是字符串（<code>is_string</code>）。</li>
+        <li>密码、token、哈希一律用 <code>hash_equals($known, $user)</code> 做恒定时间比较，别用 <code>==</code>。</li>
+        <li>入口统一类型校验：参数该是字符串就拒绝数组，别让 <code>[]</code> 悄悄改变类型。</li>
+        <li>打开错误日志但关闭页面回显，避免 Warning 泄露内部结构。</li>
+      </ul>
+
+      <div class="note">
+        <p>本文只记录公开靶场里的学习过程，flag 统一写作 flag{...}。真实站点请勿未授权测试。</p>
+      </div>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

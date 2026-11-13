@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku 管理员系统：伪造一个来源 IP · zhshy</title>
+<meta name="description" content="Bugku 管理员系统复盘：为什么 X-Forwarded-For 可以被任意伪造，以及真实环境里代理层校验该怎么做。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 管理员系统：伪造一个来源 IP">
+<meta property="og:description" content="页面信了 X-Forwarded-For，于是我成了内网管理员。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-admin.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-admin">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">X-Forwarded-For</span>
+      <span class="tag">HTTP头伪造</span>
+    </div>
+    <h1>Bugku 管理员系统：伪造一个来源 IP</h1>
+    <p class="article-meta">
+      <time datetime="2026-10-16">2026-10-16</time>
+      <span class="dot-sep">·</span>
+      <span>约 8 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      页面说「只允许管理员从内网访问」。既然它信 HTTP 头，那我就可以是内网，也可以是管理员。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF · Web</td></tr>
+          <tr><th>类型</th><td>来源 IP 校验绕过</td></tr>
+          <tr><th>知识点</th><td>X-Forwarded-For、X-Real-IP、信任边界</td></tr>
+          <tr><th>目标</th><td>进入只对「本地 / 内网」开放的管理页</td></tr>
+        </tbody>
+      </table>
+
+      <h2>页面上的两个提示</h2>
+      <p>
+        首页只有两句话：一句是「只允许管理员访问」，另一句是「只允许本地访问」。我先是老老实实找登录口、翻 robots.txt、看 JS 里有没有藏接口，折腾半天没有进展。
+        后来把请求丢进 Burp 重放，随手加了一个 <code>X-Forwarded-For: 127.0.0.1</code>，页面直接变成了管理界面。
+      </p>
+      <p>
+        那一刻有点无语 —— 不是我技术变强了，而是它把「我是谁」完全交给了我的请求头。这类题考的不是漏洞深度，而是对 HTTP 信任模型的理解。
+      </p>
+
+      <h2>为什么这种校验是假的</h2>
+      <p>
+        <code>X-Forwarded-For</code> 不是 HTTP 标准里的头，它是一串由代理「顺手加上」的约定。客户端完全可以自己写一个发出去，服务器看到的值和真实连接毫无关系。
+        更糟的是，如果服务器直接拿 <code>$_SERVER['REMOTE_ADDR']</code> 之外的头做判断，就等于让攻击者自己声明身份。
+      </p>
+      <pre><code class="language-php">&lt;?php
+// 典型的错误写法：拿一个可伪造的头当"内网身份"
+$ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'];
+if (strpos($ip, '127.0.0.1') !== false || strpos($ip, '192.168.') === 0) {
+    echo "welcome, admin: flag{...}";
+} else {
+    echo "only local admin";
+}</code></pre>
+      <p>
+        这个判断有两个致命点。第一，它信了客户端能写的头；第二，它用 <code>strpos</code> 做「包含」匹配，<code>127.0.0.1.attacker.com</code> 这种值也能过。
+        正确的做法只能是：判断代理链、由最外层可信代理覆盖该头，而不是在应用层「读一下头就放行」。
+      </p>
+      <p>
+        还有个常见误区：<code>REMOTE_ADDR</code> 是 TCP 连接对端的地址，前面没有代理时它伪造不了；可一旦加了 Nginx，<code>REMOTE_ADDR</code> 就变成 Nginx 自己，
+        代码只好去看 XFF —— 问题恰恰出在「只好」这两个字上。
+      </p>
+
+      <h2>用 Burp 或 Hackbar 加一个头</h2>
+      <p>
+        方法很多：浏览器插件（Hackbar、ModHeader）加自定义头最省事，批量试就上 Burp 的 Repeater，纯命令行走 <code>curl -H</code>。我习惯先用 curl 确认，因为结果能贴进笔记复现。
+      </p>
+      <pre><code class="language-bash"># 最直接的：声明自己是本机
+curl -H "X-Forwarded-For: 127.0.0.1" "http://靶机/admin.php"
+
+# 有的实现只认 X-Real-IP 或 Client-IP
+curl -H "X-Real-IP: 127.0.0.1" "http://靶机/admin.php"
+
+# 代理链写法：逗号分隔，最左边是"客户端"
+curl -H "X-Forwarded-For: 127.0.0.1, 10.0.0.1" "http://靶机/admin.php"</code></pre>
+      <p>
+        <code>X-Forwarded-For</code> 的语义是「谁经过了谁」：最左边是原始客户端，往右是各级代理。很多代码取第一个值，也有很多取最后一个，
+        所以有时两种顺序都要试。日志里看到一个陌生的 IP 排在前面，并不代表它真的连过服务器。
+      </p>
+
+      <h2>如果还不行：补上身份线索</h2>
+      <p>
+        有些题除了 IP 还校验 User-Agent 或 Referer。这种情况下单加 XFF 没反应，得把整套身份补齐；先把响应头和报错读干净，它会告诉你缺什么：
+      </p>
+      <ul>
+        <li>提示「必须是管理员」→ 试 <code>User-Agent</code> 里带 admin 字样，或加 <code>Cookie: role=admin</code>。</li>
+        <li>提示「只能从内网访问」→ 优先试 <code>X-Forwarded-For</code>，其次 <code>X-Real-IP</code>、<code>Client-IP</code>、<code>Forwarded</code>。</li>
+        <li>提示「请从管理后台跳转」→ 补 <code>Referer: http://127.0.0.1/admin/</code>，这类校验同样不可信。</li>
+      </ul>
+      <p>
+        <code>Forwarded</code> 是标准化的替代头，格式是 <code>for=127.0.0.1;proto=http</code>。开发时新旧两套都兼容的代码很多，所以两个都值得试。
+      </p>
+
+      <h2>真实环境里为什么不能这么写</h2>
+      <p>
+        生产环境的链路通常是「客户端 → CDN/WAF → Nginx → 应用」。如果应用直接信任 XFF，那么任何人只要绕过前三层直连源站，或者前三层只是「追加」而不是「覆盖」，
+        就能把自己写成任何 IP。真正安全的前提是：应用只信任来自已知代理网段的连接，并且由最外层代理把客户端自带的 XFF 丢弃、重新生成一条干净的链。
+      </p>
+      <p>
+        换句话说，IP 是网络层身份，不该由应用层从请求头里读。应用该让代理传递签名过的身份（JWT 或 mTLS），而不是一个随便填的字符串。
+      </p>
+      <p>
+        还有一种更隐蔽的情况：WAF 把 XFF 清洗干净了，应用却自己又拼了一遍「客户端值, 代理 IP」，第一个值仍然是攻击者写的。
+        清洗必须发生在最外层，而且用完就覆盖，不能留在链中间。
+      </p>
+
+      <h2>防御建议</h2>
+      <ul>
+        <li>不要在应用代码里用 <code>HTTP_X_FORWARDED_FOR</code> 判断权限；权限判断应该基于会话和角色。</li>
+        <li>如果一定要取真实 IP，只采信「来自已配置代理网段」的请求，并从代理链的右侧往回取，而不是取第一个。</li>
+        <li>在 Nginx 层用 <code>real_ip_header</code> + <code>set_real_ip_from</code> 限定可信来源，并显式覆盖客户端传入的值。</li>
+        <li>管理后台不要靠「内网 IP」当唯一门槛，改走 VPN、SSO 或多因素认证。</li>
+        <li>用严格匹配或 <code>ip2long</code> 网段判断，别用 <code>strpos</code> 这种包含匹配。</li>
+      </ul>
+
+      <div class="note">
+        <p>本文只记录公开靶场里的学习过程，flag 统一写作 flag{...}。真实站点请勿未授权测试。</p>
+      </div>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

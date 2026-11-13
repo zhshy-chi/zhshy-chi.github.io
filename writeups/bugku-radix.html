@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku 进制转换：先判断它是什么进制 · zhshy</title>
+<meta name="description" content="Bugku 进制转换题笔记：如何靠字符集判断二进制、八进制、十六进制与十进制，用 Python int(x, base) 批量转换，再套一层 ASCII 还原明文。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 进制转换：先判断它是什么进制">
+<meta property="og:description" content="先数它的字符集，再决定按几位切、按几进制转。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-radix.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-radix">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Crypto</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Crypto">Crypto</span>
+      <span class="tag">进制</span>
+      <span class="tag">编码转换</span>
+    </div>
+    <h1>Bugku 进制转换：先判断它是什么进制</h1>
+    <p class="article-meta">
+      <time datetime="2026-11-06">2026-11-06</time>
+      <span class="dot-sep">·</span>
+      <span>约 7 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      一串看不懂的字符，先别猜，先数它的字符集。进制判断对了，转换只是一行代码的事；判断错了，怎么试都是乱码。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF</td></tr>
+          <tr><th>类型</th><td>Crypto（编码转换）</td></tr>
+          <tr><th>知识点</th><td>二进制、八进制、十六进制、ASCII、Python int</td></tr>
+          <tr><th>flag</th><td>flag{...}</td></tr>
+        </tbody>
+      </table>
+      <p>题目给的是一长串数字，没有空格，也没有提示。新手最容易犯的错误是「先猜一个进制试一下」，猜错了再换一个，来回折腾。其实判断进制不需要灵感，只需要数一数：它用了哪些字符，最大的是几。</p>
+
+      <h2>第一步：数它的字符集</h2>
+      <p>拿出题目里的字符串，只看它出现过哪些字符，答案基本就出来了。只有 0 和 1，那必然是二进制；出现 2 到 7 但没有任何一位超过 7，是八进制；出现 8 或 9，就不是八进制；再出现 a 到 f，那大概是十六进制。这个方法不需要任何工具，用眼睛扫一遍就行。</p>
+      <p>还有一种情况：字符全在 0 到 9 之间，但每两位一组、数值都不超过 255，那它很可能是十进制的 ASCII 码，而不是某个大整数。这时候要看「分组」而不是看「进制」——长度是 3 的倍数、三位一组，往往就是十进制 ASCII。</p>
+
+      <h2>一眼识别法：前缀与字符集</h2>
+      <p>如果字符串带前缀，事情就简单了：0b 开头是二进制，0o 开头是八进制，0x 开头是十六进制。没有前缀时，按字符集和长度判断：</p>
+      <table>
+        <tbody>
+          <tr><th>进制</th><th>字符集</th><th>典型样子</th></tr>
+          <tr><td>二进制</td><td>0 1</td><td>01100110 01101100</td></tr>
+          <tr><td>八进制</td><td>0 到 7</td><td>146 154 141 147</td></tr>
+          <tr><td>十进制</td><td>0 到 9</td><td>102 108 97 103</td></tr>
+          <tr><td>十六进制</td><td>0 到 9、a 到 f</td><td>66 6c 61 67</td></tr>
+        </tbody>
+      </table>
+      <p>注意一个细节：有 8 或 9 只能排除八进制，不能直接确定是十进制——十六进制也有 8 和 9。还要再看有没有 a 到 f。同理，只出现 0 到 7 时，八进制和十进制都可能，这时看有没有前导零、看数值分布。</p>
+
+      <h2>用 int(x, base) 批量转换</h2>
+      <p>Python 的 <code>int()</code> 第二个参数就是进制，这是整道题最核心的一行。把字符串按分隔符切开，逐个调用，就能把「看起来像数字的东西」变成真正的数值。</p>
+      <pre><code class="language-python">s = '01100110 01101100 01100001 01100111'
+nums = [int(b, 2) for b in s.split()]
+print(nums)                      # [102, 108, 97, 103]
+
+# 八进制、十六进制同理，只换第二个参数
+print(int('146', 8), int('66', 16))     # 102 102</code></pre>
+      <p>如果字符串是连续的一整串、没有空格，就先按位宽切：二进制每 8 位、十六进制每 2 位、八进制每 3 位。用切片加 range 写循环最直观，比手动数位置靠谱。</p>
+      <pre><code class="language-python">s = '01100110011011000110000101100111'
+nums = [int(s[i:i+8], 2) for i in range(0, len(s), 8)]
+print(nums)      # [102, 108, 97, 103]</code></pre>
+      <p>反过来，<code>bin()</code>、<code>oct()</code>、<code>hex()</code> 可以把整数转成带前缀的字符串，写脚本验证时很方便：<code>hex(102)</code> 得到 <code>0x66</code>。</p>
+
+      <h2>再套一层 ASCII</h2>
+      <p>进制转换本身只得到数字，还不是明文。102、108、97、103 看起来平平无奇，但把它们当 ASCII 码查表，就是 f、l、a、g。这一步用 <code>chr()</code> 完成，反向用 <code>ord()</code>。</p>
+      <pre><code class="language-python">print(''.join(chr(n) for n in [102, 108, 97, 103]))   # flag
+print([ord(c) for c in 'flag'])                        # [102, 108, 97, 103]</code></pre>
+      <p>很多题会在这里设一个坑：给出的数字范围不是 32 到 126，而是更大，比如四位数。那它可能不是 ASCII，而是 Unicode 码点，或者需要先做异或、加减某个固定值。遇到范围不对时，先别硬转，把最大值和最小值打印出来看看，往往能反推出规律。</p>
+
+      <h2>前缀与常见坑</h2>
+      <ul>
+        <li>前导零：<code>0102</code> 在 Python 3 里直接写是语法错误，放进 <code>int()</code> 则按十进制处理；别被「0 开头就是八进制」的旧习惯误导。</li>
+        <li>大小写：十六进制的 A 和 a 等价，但有些老脚本只认一种，统一 <code>lower()</code> 最稳。</li>
+        <li>缺位：二进制串长度不是 8 的倍数、十六进制串长度是奇数，说明要么有字符被吞了，要么开头少补了零。</li>
+        <li>分隔符：空格、逗号、换行都可能出现，切之前先确认到底用的是哪个。</li>
+      </ul>
+      <p>这几条里我踩得最多的是缺位。有次二进制串长 71 位，怎么切都对不上，最后发现是从网页复制时首字符的 0 被吞了，补一个零立刻正常。所以转换结果出现乱码时，先怀疑「长度」，再怀疑「进制」。</p>
+
+      <h2>踩坑与复盘</h2>
+      <p>这题我前后试了三次。第一次按十进制转，得到一堆不可见字符；第二次按十六进制转，像是对了但结果是乱码；第三次坐下来数了一遍字符集，发现只有 0 和 1，才意识到它是二进制。三次尝试里，前两次的失败都不是代码写错，而是判断错了前提。</p>
+      <p>教训很直白：先判断它是什么，再决定怎么处理。判断方法要能说清楚——「因为只出现了 0 和 1，所以是二进制」，而不是「感觉像二进制」。前者可以复现，后者只能靠运气。</p>
+
+      <h2>引申：套娃编码</h2>
+      <p>CTF 里更常见的是套娃：一层 base64，解出来是一串十六进制，转成字节又是一段二进制，最后才拼出 flag。处理这种题的诀窍是「一次只剥一层，每剥一层就看一眼输出可不可打印」。如果输出里大部分是可见字符，说明方向对了；如果全是乱码，说明这一层还没解完，或者解错了。</p>
+      <p>把流程写成脚本会比在线工具可靠得多，也便于回头检查。真正的收获不是这道题的答案，而是那套「判断、转换、验证」的循环——以后遇到任何一串看不懂的字符，你都知道第一步该做什么。</p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku web 基础 POST：看不见的参数 · zhshy</title>
+<meta name="description" content="参数不在 URL 里，地址栏怎么改都没用。用 curl 和 Burp Repeater 往请求体里塞 what=flag 的一次练习。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku web 基础 POST：看不见的参数">
+<meta property="og:description" content="参数不在 URL 里，地址栏怎么改都没用，得从请求体里塞进去。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-post.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-post">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">POST</span>
+      <span class="tag">Burp Suite</span>
+    </div>
+    <h1>Bugku web 基础 POST：看不见的参数</h1>
+    <p class="article-meta">
+      <time datetime="2026-09-26">2026-09-26</time>
+      <span class="dot-sep">·</span>
+      <span>约 6 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku 练习场</span>
+    </p>
+    <p class="article-lead">
+      这次参数不在 URL 里，地址栏怎么改都没用 —— 得从请求体里塞进去。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku 练习场</td></tr>
+          <tr><th>类型</th><td>Web · POST 传参</td></tr>
+          <tr><th>知识点</th><td>请求体、curl -d、Burp Suite Repeater</td></tr>
+        </tbody>
+      </table>
+      <p>这是 GET 那题的姊妹题，题面几乎一样，只是把 <code>$_GET</code> 换成了 <code>$_POST</code>。它就一个目的：让你亲手感受一下「参数不在 URL 里」是什么感觉。</p>
+
+      <h2>现象：地址栏怎么改都没反应</h2>
+      <p>题面和上一题一样，也是要 what 等于 flag，但源码换成了 <code>$_POST['what']</code>。我按上一题的习惯在地址栏加 <code>?what=flag</code>，页面毫无变化，回显是空的。</p>
+      <p>原因很直接：<code>$_POST</code> 只从请求体里取值，URL 上的 query string 它根本不看。地址栏能改的只有 URL，改不出一个请求体来，所以这条路从一开始就是死的。这个「空回显」其实是个很好的信号——它说明参数根本没送达，不是值不对。</p>
+
+      <h2>参数在请求体里</h2>
+      <p>一个 HTTP 请求分三部分：请求行（方法 + 路径 + 版本）、请求头、请求体。GET 一般没有请求体，参数在请求行的 URL 里；POST 的参数在请求体里，通常还配一个 <code>Content-Type: application/x-www-form-urlencoded</code>，body 长这样：</p>
+      <pre><code class="language-http">what=flag</code></pre>
+      <p>多个参数就用 <code>&amp;</code> 连起来：<code>what=flag&amp;submit=1</code>。服务端的 <code>$_POST</code> 就是把这个 body 按同样的规则拆开。所以这题需要的操作不是「改地址」，而是「构造一个带 body 的请求」。地址栏做不到，浏览器插件、curl、Burp 都能做到。</p>
+
+      <h2>用 curl -d 把参数塞进 body</h2>
+      <p>curl 的 <code>-d</code> 就是干这个的：</p>
+      <pre><code class="language-bash">curl -s -X POST -d "what=flag" http://靶机地址/
+curl -s -i -d "what=flag" http://靶机地址/          # 顺便看响应头
+curl -s --data-urlencode "what=flag" http://靶机地址/   # 参数含特殊字符时用这个</code></pre>
+      <p><code>-d</code> 会自动把方法设成 POST，也会补上 <code>Content-Type: application/x-www-form-urlencoded</code>，所以 <code>-X POST</code> 其实可以省。浏览器里也可以用 Hackbar 这类插件，它本质上是帮你拼一个 POST 请求；或者直接开 Console 写 fetch：</p>
+      <pre><code class="language-bash">fetch('http://靶机地址/', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+  body: 'what=flag'
+}).then(r =&gt; r.text()).then(console.log)</code></pre>
+
+      <h2>Burp 抓包，扔进 Repeater</h2>
+      <p>真实一点的流程是用 Burp。先把浏览器代理指向 127.0.0.1:8080，打开拦截，然后在页面上正常提交一次表单，你会看到这样一个请求：</p>
+      <pre><code class="language-http">POST / HTTP/1.1
+Host: 靶机地址
+User-Agent: Mozilla/5.0 ...
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 9
+
+what=abc</code></pre>
+      <p>把 body 改成 <code>what=flag</code>，注意 Content-Length 要跟着变（Burp 会自动更新，手写的时候别忘了）。然后右键 Send to Repeater，在 Repeater 里点 Send，右边就能看到响应里的 <code>flag{...}</code>。Repeater 的好处是可以反复改、反复发，不用每次回浏览器点一遍。</p>
+      <div class="note">
+        <p>抓不到包先检查三件事：浏览器代理有没有开、Burp 的 Intercept 是不是处于 on、目标是不是 HTTPS——HTTPS 要在浏览器里信任 Burp 的证书，否则请求会直接失败。</p>
+      </div>
+
+      <h2>对比：请求行和 body</h2>
+      <p>把 GET 和 POST 的原始请求摆在一起看，差别一目了然。GET 的第一行是 <code>GET /?what=flag HTTP/1.1</code>，参数在 URL 里，后面没有 body；POST 的第一行是 <code>POST / HTTP/1.1</code>，路径干干净净，参数在空行之后的 body 里。这就是为什么抓包工具里 GET 一眼就能看到参数，而 POST 要往下拉一点。</p>
+      <p>在 Repeater 里我顺手做了个对照实验：把同一个参数改成用 GET 发，页面立刻变回空回显。这反过来验证了服务端确实只读 <code>$_POST</code>。改一个变量、看一次结果，比盯着代码猜有效得多。</p>
+      <p>顺带说一个常见误解：POST 不会让参数「更安全」。body 只是不显示在地址栏，抓包照样看得一清二楚，明文 HTTP 下没有任何保密性可言。真正的保密靠 HTTPS，真正的可信靠服务端校验。</p>
+
+      <h2>服务器不关心是谁发的</h2>
+      <p>做完这题我记住一句话：服务器不关心请求是谁发的，只关心参数对不对。它看到的只有方法、路径、头、body，看不到你是用浏览器、curl 还是 Burp。User-Agent 可以伪装，Referer 可以伪造，所谓「只能用页面提交」从来不是限制。</p>
+      <p>防御侧：不要用「参数在 POST 里」当作安全措施；对 POST 接口同样做参数校验；涉及状态变更的接口要加 CSRF 防护，因为浏览器会自动带上 Cookie，而这恰恰是「谁发的」唯一还有点意义的地方。</p>
+      <p>复盘一条：GET 题做多了会形成「拼 URL」的肌肉记忆，遇到 POST 就容易卡住。后来我判断方法很简单——看地址栏里有没有参数，看表单的 method 属性，两个都对不上就默认去抓包。慢一点，但不会在错误的方向上耗时间。</p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

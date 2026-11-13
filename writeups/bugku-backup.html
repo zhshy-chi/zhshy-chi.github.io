@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku 备份是个好习惯：把 .bak 翻出来 · zhshy</title>
+<meta name="description" content="站点备份忘了删，源码就躺在 web 目录里。记录常见备份命名、dirsearch 扫描、下载后审计源码并找出绕过条件的过程。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 备份是个好习惯：把 .bak 翻出来">
+<meta property="og:description" content="站点备份忘了删，源码就躺在 web 目录里。记录常见备份命名、dirsearch 扫描、下载后审计源码并找出绕过条件的过程。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-backup.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-backup">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">备份文件泄露</span>
+      <span class="tag">源码审计</span>
+    </div>
+    <h1>Bugku 备份是个好习惯：把 .bak 翻出来</h1>
+    <p class="article-meta">
+      <time datetime="2026-10-10">2026-10-10</time>
+      <span class="dot-sep">·</span>
+      <span>约 8 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku</span>
+    </p>
+    <p class="article-lead">
+      站长备份文件时忘了删，整份源码就躺在 web 目录里等人下载。这篇记一下常见备份命名、怎么扫出它们，以及拿到源码之后该看哪里。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF 练习平台</td></tr>
+          <tr><th>类型</th><td>Web / 源码泄露</td></tr>
+          <tr><th>知识点</th><td>备份文件命名、目录扫描、PHP 源码审计</td></tr>
+          <tr><th>工具</th><td>dirsearch、御剑、curl</td></tr>
+        </tbody>
+      </table>
+
+      <h2>页面长什么样</h2>
+      <p>
+        首页非常朴素，一段欢迎文字加一个查 flag 的输入框。随便填点什么提交，页面只回一句「没有找到」。源码里没有注释，也没有多余的外链，看不出任何可利用的点，像是故意做得干干净净。
+      </p>
+      <p>
+        但题目名字已经把方向写死了：「备份是个好习惯」。这句话不是让你养成备份习惯，而是在告诉你 —— 这里有人备份过，而且备份放在了一个能被访问到的地方。那就别在功能上纠缠了，去翻文件。
+      </p>
+
+      <h2>常见的备份命名</h2>
+      <p>
+        备份文件泄露之所以好挖，是因为命名高度规律。手工维护的备份通常是「原名加后缀」：<code>index.php.bak</code>、<code>index.php~</code>、<code>index.php.swp</code>、<code>index.php.save</code>、<code>index.php.old</code>、<code>.index.php.swp</code>。打包备份则常叫 <code>www.zip</code>、<code>www.tar.gz</code>、<code>web.rar</code>、<code>backup.zip</code>、<code>站点名.zip</code>。
+      </p>
+      <p>
+        还有一类是版本控制目录被一起传上去：<code>.git/</code>、<code>.svn/</code>、<code>.hg/</code>。它们比单个备份更危险，因为整个仓库的历史都在里面，哪怕当前源码删掉了敏感逻辑，翻历史提交也能找回来。
+      </p>
+
+      <h2>目录扫描找备份</h2>
+      <p>
+        手猜几个最常见的先试：<code>/index.php.bak</code>、<code>/www.zip</code>、<code>/.git/HEAD</code>。前两个都 404，但 <code>/.git/HEAD</code> 返回了 <code>ref: refs/heads/master</code> —— 说明 <code>.git</code> 目录是公开的。这条线索比单个备份更值钱。
+      </p>
+      <p>
+        拿工具扫一遍更省事，dirsearch 一条命令：
+      </p>
+      <pre><code class="language-bash">python dirsearch.py -u "http://靶机地址/" -e bak,zip,tar,gz,old,swp -w backup.txt</code></pre>
+      <p>
+        御剑也行，字典选「备份文件」那一类。扫描的时候注意看响应长度：备份文件往往比 404 页面大，长度一列会明显跳出来。如果站点有 WAF，把线程数降到 1，加个延迟，别把目标打挂。
+      </p>
+
+      <h2>下载并审计源码</h2>
+      <p>
+        <code>.git</code> 泄露可以用 <code>GitHack</code> 或者 <code>dirsearch</code> 配合工具把仓库还原出来。还原之后 <code>git log</code> 翻一遍，最后一次提交的说明里常常写着「fix bug」或者「remove test」，正好指向你要找的那段逻辑。
+      </p>
+      <pre><code class="language-bash">python GitHack.py "http://靶机地址/.git/"
+cd 靶机地址
+git log --oneline --all</code></pre>
+      <p>
+        翻到一个 <code>flag.php</code>，内容大致是：
+      </p>
+      <pre><code class="language-php">&lt;?php
+$key = $_GET['key'];
+if (md5($key) == '0e123456789012345678901234567890') {
+    echo 'flag{...}';
+} else {
+    echo '没有找到';
+}
+?&gt;</code></pre>
+      <p>
+        这段代码用 <code>md5</code> 的返回值和一个 <code>0e</code> 开头的字符串做松散比较。乍看是拿哈希当密码，好像很安全，问题其实出在 <code>==</code> 上：<code>0e</code> 后面全是数字的字符串会被当成科学计数法，两边都转成 0，于是相等。也就是说，只要找一个 md5 之后形如 <code>0e123...</code> 的字符串，就能白嫖这一关。审计时把每个比较符是 <code>==</code> 还是 <code>===</code> 标出来，这类点一眼就能看见。
+      </p>
+
+      <h2>从源码里读出绕过条件</h2>
+      <p>
+        继续往下翻，还有一层判断：<code>if ($key == 'admin')</code>，但前面又 <code>if (is_numeric($key)) die()</code>。两个条件叠加，还是老配方 —— 要一个「不是数字却等于 admin」的值，PHP 5 里 <code>admin</code> 转数字是 0，所以 <code>$key</code> 传 <code>0</code> 反而会被第一关拦下。真正的解法在另一个分支：<code>strcmp($key, $flag)</code>，传数组进去让它返回 <code>null</code>，<code>null == 0</code> 成立，直接过。
+      </p>
+      <p>
+        这段审计过程比 payload 本身重要。拿到源码之后不要急着搜 <code>flag</code>，先通读一遍数据流：参数从哪进来、经过了哪些判断、最后在哪被使用。判断和使用的函数不一致，就是绕过点；判断漏了某个类型（数组、对象），就是绕过点。
+      </p>
+
+      <h2>拿到结果</h2>
+      <p>
+        按源码里的条件构造请求，页面回显 <code>flag{...}</code>。整个过程没有爆破、没有复杂利用，纯粹是「看到了不该看到的文件」。这也是源码泄露类题目的共同特征：拿到源码的一刻，题就做完了一半。
+      </p>
+
+      <div class="note">
+        <p>信息收集阶段多花十分钟翻备份，可能比后面花两小时猜逻辑更有效。攻击面不只在功能里，也在没人维护的角落里。</p>
+      </div>
+
+      <h2>踩坑与复盘</h2>
+      <ul>
+        <li>一开始只在输入框里试各种注入，完全没往文件方向想，浪费了不少时间。</li>
+        <li>一开始手工猜 <code>index.php.bak</code> 和 <code>www.zip</code> 都是 404，以为没戏，差点去研究那个输入框；换成 <code>/.git/HEAD</code> 才发现真入口。</li>
+        <li>审计时没注意 <code>==</code> 和 <code>===</code> 的区别，按强比较的思路构造了半天，回头细看源码才发现是松散比较。</li>
+      </ul>
+
+      <h2>防御建议</h2>
+      <p>
+        最直接的一条：永远不要把备份、压缩包、版本控制目录放进 web 根目录。备份统一放到站点之外的位置，文件名加随机串，定期清理。nginx 里显式 deny 掉 <code>\.(bak|old|swp|zip|tar|gz)$</code> 和 <code>/\.git/</code>，Apache 用 <code>&lt;FilesMatch&gt;</code> 配同样的规则。CI 流水线里加一步检查，发布前把这类文件挡在门外，比出事之后再删要靠谱得多。
+      </p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

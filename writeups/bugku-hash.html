@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ↓↓↓ 改这里：标题 / 描述 / 地址 ↓↓↓ -->
+<title>Bugku 散列：把哈希先认出来再说 · zhshy</title>
+<meta name="description" content="拿到一串 32 位十六进制先别爆破：常见哈希长度对照、hashid 识别、rockyou 字典，以及 MD5 碰撞与正确的密码存储方式。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 散列：把哈希先认出来再说">
+<meta property="og:description" content="给你一串 32 位十六进制，先别急着爆破，先确认它到底是 MD5、NTLM 还是别的。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-hash.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<!-- ↓ data-slug 必须和 writeups.js 里的 slug 一致，上一篇/下一篇才能对上 ↓ -->
+<body data-page="article" data-slug="bugku-hash">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Crypto</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Crypto">Crypto</span>
+      <span class="tag">MD5</span>
+      <span class="tag">哈希识别</span>
+    </div>
+    <h1>Bugku 散列：把哈希先认出来再说</h1>
+    <p class="article-meta">
+      <time datetime="2026-11-02">2026-11-02</time>
+      <span class="dot-sep">·</span>
+      <span>约 8 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      给你一串 32 位十六进制，先别急着「爆破」。先确认它到底是 MD5、NTLM 还是别的 —— 认错了算法，后面所有努力都是白费。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF</td></tr>
+          <tr><th>类型</th><td>Crypto / 哈希</td></tr>
+          <tr><th>知识点</th><td>哈希识别、字典爆破、加盐存储</td></tr>
+        </tbody>
+      </table>
+
+      <h2>先别急着爆破</h2>
+      <p>题目给了一段十六进制：</p>
+      <pre><code class="language-bash">e10adc3949ba59abbe56e057f20f883e</code></pre>
+      <p>很多人的第一反应是丢进在线「解密」站。但「解密」这个词对哈希是不成立的：哈希是单向函数，没有密钥，也就不存在逆向。那些站点做的其实是「查表 + 跑字典」，能找到只说明原文在它的库里。</p>
+      <p>所以在动手之前，先确认它是哪种哈希。这一步花不了两分钟，却能省掉后面一小时的瞎试。</p>
+      <p>实际上识别还可以更省事：把字符串丢进 CyberChef 的 Magic，或者用 Kali 自带的 hash-identifier，它会按可能性排序列出候选。但工具的输出只能当线索，不能当结论 —— 尤其是 32 位的串，MD5 和 NTLM 在长度上完全一样，工具也分不出来。</p>
+
+      <h2>先数长度，再看前缀</h2>
+      <table>
+        <thead>
+          <tr><th>长度 / 前缀</th><th>常见算法</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>32 位 hex</td><td>MD5、NTLM、LM</td></tr>
+          <tr><td>40 位 hex</td><td>SHA1</td></tr>
+          <tr><td>64 位 hex</td><td>SHA256</td></tr>
+          <tr><td>96 位 hex</td><td>SHA384</td></tr>
+          <tr><td>128 位 hex</td><td>SHA512</td></tr>
+          <tr><td>$1$</td><td>MD5-crypt（Linux）</td></tr>
+          <tr><td>$2a$ / $2y$ / $2b$</td><td>bcrypt</td></tr>
+          <tr><td>$6$</td><td>SHA512-crypt</td></tr>
+        </tbody>
+      </table>
+      <p>长度只能缩小范围，不能定论：32 位可能是 MD5，也可能是 Windows 里的 NTLM。这时候要看上下文 —— 题目是 Web 站，还是给了域环境？另外，如果有盐，长度会变化（md5($pass.$salt) 仍是 32 位，但值完全不同），只靠长度就更难判断了。</p>
+
+      <h2>用 hashid 与 hash-identifier 确认</h2>
+      <p>这两个工具都是按长度、字符集、前缀做模式匹配，给出候选列表和置信度：</p>
+      <pre><code class="language-bash">hashid e10adc3949ba59abbe56e057f20f883e
+hashid -m e10adc3949ba59abbe56e057f20f883e
+hash-identifier</code></pre>
+      <p>输出会写 MD5 [Hashcat Mode: 0]、NTLM [1000] 之类。加 -m 会直接给出 hashcat 的模式号，省得自己查表。记住工具只是给建议：它说「可能是」，最终还得结合场景自己判断。</p>
+
+      <h2>字典比暴力破解更实际</h2>
+      <p>确认是 MD5 之后，别想着穷举 32 位空间 —— 那是不可能的。真实题目里的密码几乎都是弱口令，rockyou 这类字典命中率很高：</p>
+      <pre><code class="language-bash">hashcat -m 0 -a 0 hash.txt rockyou.txt
+john --format=raw-md5 --wordlist=rockyou.txt hash.txt</code></pre>
+      <p>这题的串解出来是 123456，一个教科书级别的弱口令，整个过程不到一秒。这也正好说明了问题：不是攻破算法，而是密码太弱。</p>
+      <p>用字典时注意两点：模式号必须和算法对上（-m 0 是 MD5，-m 1000 是 NTLM），模式错了会一直显示未找到；另外记得加 --show 回看已经跑出来的结果，别重复跑。</p>
+
+      <h2>MD5 碰撞与长度扩展（入门概念）</h2>
+      <p>两件事要分清。碰撞是找两个不同的输入、得到相同的哈希，MD5 在 2004 年就被王小云团队攻破，所以它不该再用于签名或完整性校验。长度扩展是另一回事：MD5 属于 Merkle–Damgård 结构，知道 hash(secret||msg) 和 secret 的长度，就能在不认识 secret 的情况下算出 hash(secret||msg||padding||append)。所以「用 md5(secret.msg) 当签名」是错的，正确的做法是 HMAC。</p>
+      <p>顺带一提，很多「MD5 解密」网站会把常见串直接缓存在库里，看着像秒解，其实只是命中了别人的字典。真遇到随机盐，它们一样无能为力 —— 这也从反面说明盐的价值。</p>
+
+      <h2>盐到底解决了什么</h2>
+      <p>彩虹表是「预先算好的哈希到原文」大表。不加盐时，同一个密码永远得到同一个哈希，一张表可以打穿所有用户；加了盐，每个用户的哈希都不同，表就失效了，攻击者只能对单个目标现算。</p>
+      <p>但盐不解决「密码太弱」。123456 加盐后仍然会被字典命中，只是要多花一点时间。所以慢哈希（bcrypt、argon2）和盐要一起用：盐负责让预计算失效，慢负责让逐个尝试变贵，两者缺一不可。</p>
+
+      <h2>该怎么存密码</h2>
+      <p>MD5、SHA1、SHA256 都太快了，快就意味着 GPU 每秒能算几十亿次。正确做法是慢哈希加每用户随机盐：bcrypt（cost 10 以上）、scrypt、argon2id。盐让彩虹表失效，慢让爆破成本变高。再补两条：登录失败提示统一，限制尝试次数。</p>
+      <p>这题给我的最大收获不是「解出了一个 MD5」，而是养成了一个顺序：先识别，再选工具，最后才动手。哈希题如此，别的题也一样。</p>
+      <p>顺带一句：如果库里已经存了不加盐的 MD5，正确的做法不是「再套一层 MD5」，而是下次登录时用新算法重算并平滑迁移。</p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

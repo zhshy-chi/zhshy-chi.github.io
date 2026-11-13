@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugku 各种绕过：一次试完所有花招 · zhshy</title>
+<meta name="description" content="Bugku 各种绕过题笔记：空格、关键字、二次编码、数组传参，一张对照表把黑名单过滤的漏点过一遍。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="Bugku 各种绕过：一次试完所有花招">
+<meta property="og:description" content="过滤规则永远写不全，把能试的编码都试一遍。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/bugku-bypass.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="bugku-bypass">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">WAF绕过</span>
+      <span class="tag">编码</span>
+    </div>
+    <h1>Bugku 各种绕过：一次试完所有花招</h1>
+    <p class="article-meta">
+      <time datetime="2026-10-18">2026-10-18</time>
+      <span class="dot-sep">·</span>
+      <span>约 9 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>Bugku CTF</span>
+    </p>
+    <p class="article-lead">
+      这题关键词过滤得很凶，但过滤规则永远写不全 —— 把能试的编码都试一遍，是我这次最大的收获。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>Bugku CTF · Web</td></tr>
+          <tr><th>类型</th><td>黑名单过滤绕过</td></tr>
+          <tr><th>知识点</th><td>空格替换、关键字变形、URL 编码、数组传参</td></tr>
+          <tr><th>目标</th><td>让被拦的 payload 通过校验并执行</td></tr>
+        </tbody>
+      </table>
+
+      <h2>先探清楚它到底拦什么</h2>
+      <p>
+        别一上来就跑字典。我的顺序是：先交一个普通字符串，看回显有没有变化；再交单个特殊字符（<code>'</code>、<code>"</code>、<code>;</code>、空格、<code>/</code>、<code>&lt;</code>），
+        看它是「删掉」「替换成空」还是「直接报错」。三种反应对应三种绕过方式。
+      </p>
+      <p>
+        这题我探出来的结果很典型：空格被过滤，<code>select</code>、<code>union</code>、<code>system</code> 被拦，但过滤方式是「替换为空」而不是「终止请求」。
+        后者可以放弃，前者意味着只要变形到「替换后仍能还原语义」，就能过。
+      </p>
+
+      <h2>第一板斧：空格与关键字</h2>
+      <p>
+        空格被吃掉时，SQL 里最稳的替代是注释 <code>/**/</code>，命令行里是 <code>${IFS}</code>，URL 里还有 <code>%09</code>（Tab）、<code>%0a</code>（换行）、<code>+</code>。
+        它们在不同解析层的效果不一样，所以我会一次列出来挨个试：
+      </p>
+      <pre><code class="language-bash"># 空格被过滤后的常见替代
+union/**/select/**/1,2,3
+union%09select%091,2,3
+union%0aselect%0a1,2,3
+cat${IFS}/flag</code></pre>
+      <p>
+        关键字被拦时，先试大小写（<code>SeLeCt</code>），再试双写（<code>selselectect</code>）—— 有些过滤只替换一次，替换后拼起来正好是原词。
+        中缀注释也常有效：<code>sel/**/ect</code>。这三个方向几乎覆盖了「只做字符串替换」的过滤。
+      </p>
+
+      <h2>第二板斧：URL 编码与二次编码</h2>
+      <p>
+        这是最容易被忽略的一层。WAF 和业务代码看到的往往不是同一份字符串：WAF 在 <code>urldecode</code> 一层之后匹配，而框架可能再解码一次。
+        于是把 <code>'</code> 写成 <code>%2527</code>，WAF 解一次得到 <code>%27</code>（不像引号），应用再解一次才变回 <code>'</code>。
+      </p>
+      <pre><code class="language-bash"># 单引号的层层变形
+'            → 直接被拦
+%27          → 解一次就是 '，通常也拦
+%2527        → 解一次是 %27，解两次才是 '
+%u0027       → IIS 老解析器的 unicode 写法</code></pre>
+      <p>
+        实操时我会在 Burp 里勾上「URL-encode as you type」，或者直接改 Repeater 的原始报文 —— 浏览器和工具会自动编码，
+        有时我以为发出去的是 <code>%2527</code>，其实早被编码成 <code>%252527</code>，试半天都是自己骗自己。
+      </p>
+
+      <h2>第三板斧：用数组把参数变成 Array</h2>
+      <p>
+        如果后端用 <code>strpos</code>、<code>preg_match</code> 这类函数做检查，传数组会让它们直接失效：<code>strpos(array, 'x')</code> 在 PHP 8 会抛 TypeError，
+        PHP 7 返回 <code>null</code> 并警告；<code>preg_match</code> 遇到数组同样返回 <code>false</code>。
+        如果代码写的是「匹配到就 die」，那返回 <code>false</code> 反而等于「没匹配到」，检查被跳过。
+      </p>
+      <pre><code class="language-php">&lt;?php
+// 传 a[]=1 时，strpos 收到的不是字符串
+if (strpos($_GET['a'], 'flag') !== false) {
+    die('hacker');
+}
+echo file_get_contents($_GET['a']);   // 检查被跳过，直接读</code></pre>
+      <p>
+        这就是「过滤」和「校验」的区别：过滤假设输入是字符串，而 PHP 的参数天生可以是数组。只要代码没做 <code>is_string</code> 判断，类型就能成为绕过点。
+      </p>
+      <p>
+        还有一层常被忽略：长度。有的 WAF 只匹配前 N 个字节，payload 一长就被截断；这时把关键部分往后挪、或者用注释填充，反而能过。
+        规则写得越具体，可利用的边角就越多。
+      </p>
+
+      <h2>payload 对照表</h2>
+      <table>
+        <thead>
+          <tr><th>被拦的东西</th><th>替换写法</th><th>为什么有效</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>空格</td><td><code>/**/</code>、<code>%09</code>、<code>%0a</code>、<code>${IFS}</code></td><td>不同解析层都认这些分隔符</td></tr>
+          <tr><td>关键字</td><td><code>SeLeCt</code>、<code>selselectect</code>、<code>sel/**/ect</code></td><td>替换只做一次，或匹配区分大小写</td></tr>
+          <tr><td>引号 / 尖括号</td><td><code>%2527</code>、<code>%253C</code></td><td>多层解码，WAF 与应用看到的不是同一串</td></tr>
+          <tr><td>参数类型</td><td><code>?a[]=x</code></td><td><code>strpos</code> / <code>preg_match</code> 遇数组返回 <code>false</code></td></tr>
+          <tr><td>长度限制</td><td>分段传参、<code>chr()</code> 拼接</td><td>绕开「一次请求只能多长」的假设</td></tr>
+        </tbody>
+      </table>
+      <p>
+        用这张表的方式是「一次只改一个变量」：先固定其它部分，只替换空格，看响应有没有变化；再替换关键字。
+        同时改三处，成功了不知道是哪一处起作用，失败了更不知道该往哪调。另一个细节是分清两种拒绝：被 WAF 拦通常是 403 或固定的拦截页，
+        被业务代码拦是自己写的提示语，把「业务报错」当成「绕过成功」是我早期最爱犯的错。
+      </p>
+
+      <h2>为什么黑名单注定会漏</h2>
+      <p>
+        黑名单的本质是「列举所有坏东西」，而语言的表达方式无穷无尽：编码、大小写、注释、类型转换、等价函数（<code>system</code> 换成 <code>passthru</code>、<code>exec</code>、反引号）。
+        防守方永远在补，攻击方找到一个没被列举的等价写法就赢了。
+      </p>
+      <p>
+        这题让我记住一句话：过滤是「减去危险」，校验是「只留下安全」。前者必然有漏，后者才可穷举。
+      </p>
+
+      <h2>防御建议</h2>
+      <ul>
+        <li>用白名单而非黑名单：参数只接受明确允许的字符集和长度。</li>
+        <li>SQL 一律参数化查询，不要靠转义和关键字过滤兜底。</li>
+        <li>命令执行用参数数组形式（<code>proc_open</code> 的数组参数），不要拼字符串。</li>
+        <li>入口统一做类型校验（<code>is_string</code> / <code>filter_var</code>），别让数组流进字符串函数。</li>
+      </ul>
+
+      <div class="note">
+        <p>本文只记录公开靶场里的学习过程，flag 统一写作 flag{...}。真实站点请勿未授权测试。</p>
+      </div>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>
