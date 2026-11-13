@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://zhshy-chi.github.io/sitemap.xml
