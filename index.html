@@ -1,11 +1,167 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <title>My Blog</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zhshy · 安全笔记与 CTF Writeup</title>
+<meta name="description" content="zhshy 的网络安全笔记与 CTF Writeup：Web 渗透、Pwn、逆向、密码学，记录完整的分析过程与复盘。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="zhshy · 安全笔记与 CTF Writeup">
+<meta property="og:description" content="记录每一次 getshell 的过程：Web 渗透、Pwn、逆向、密码学的完整分析与复盘。">
+<meta property="og:url" content="https://zhshy-chi.github.io/">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
 </head>
-<body>
-    <h1>Hello!</h1>
-    <p>This is my blog.</p>
+<body data-page="home">
+<a class="skip-link" href="#main">跳到正文</a>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="index.html" aria-current="page">首页</a>
+      <a href="writeups.html">Writeups</a>
+      <a href="about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">SECURITY NOTES · CTF WRITEUP</p>
+        <h1>把每一次 <span class="accent-text">getshell</span><br>都写成笔记</h1>
+        <p class="lead">
+          我是 zhshy，一名网络安全专业的学生。这里记录我打过的靶机、做过的 CTF 题目，
+          以及每一步的思考过程 —— 信息收集、漏洞分析、利用链构造，和事后复盘。
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="writeups.html">
+            浏览 Writeups
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+          <a class="btn btn-ghost" href="about.html">关于我</a>
+        </div>
+        <ul class="hero-points">
+          <li>完整的利用过程与 payload</li>
+          <li>踩坑记录与修复建议</li>
+        </ul>
+      </div>
+
+      <div class="terminal" aria-hidden="true">
+        <div class="terminal-bar">
+          <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+          <span class="terminal-title">zhshy@kali: ~</span>
+        </div>
+        <pre class="terminal-body"><span class="t-comment"># 关于我</span>
+<span class="t-prompt">$</span> whoami
+<span class="t-out">zhshy — security student</span>
+<span class="t-prompt">$</span> cat interests.txt
+<span class="t-out">web exploitation
+binary pwn
+reverse engineering
+cryptography</span>
+<span class="t-prompt">$</span> ls writeups/
+<span class="t-out">web/  pwn/  crypto/  misc/</span>
+<span class="t-prompt">$</span> <span class="cursor">_</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="stats-strip wrap" aria-label="站点统计">
+    <div class="stat">
+      <span class="stat-num" id="stat-writeups">—</span>
+      <span class="stat-label">篇 Writeup</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num" id="stat-cats">—</span>
+      <span class="stat-label">个方向</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num" id="stat-tags">—</span>
+      <span class="stat-label">个标签</span>
+    </div>
+    <div class="stat stat-note">
+      <span class="stat-label">持续更新中 · 用纯 HTML 手写，没有框架</span>
+    </div>
+  </section>
+
+  <section class="wrap section">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">LATEST</p>
+        <h2>最新 Writeups</h2>
+      </div>
+      <a class="link-arrow" href="writeups.html">查看全部</a>
+    </div>
+    <div class="cards" id="latest-grid">
+      <noscript><p class="muted">这个列表需要启用 JavaScript 才能显示。</p></noscript>
+    </div>
+  </section>
+
+  <section class="wrap section">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">CATEGORIES</p>
+        <h2>按方向浏览</h2>
+      </div>
+    </div>
+    <div class="cat-grid" id="category-grid"></div>
+  </section>
+
+  <section class="wrap">
+    <div class="cta">
+      <div>
+        <h2>想一起打比赛？</h2>
+        <p class="muted">对题目有不同思路，或者发现文章里的错误，欢迎在 GitHub 上开 issue 找我。</p>
+      </div>
+      <a class="btn btn-primary" href="https://github.com/zhshy-chi" target="_blank" rel="noopener">
+        在 GitHub 找我
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+      </a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="writeups.html">Writeups</a>
+      <a href="about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="assets/js/writeups.js"></script>
+<script src="assets/js/site.js"></script>
 </body>
 </html>

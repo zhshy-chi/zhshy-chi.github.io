@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ↓↓↓ 改这里：标题 / 描述 / 地址 ↓↓↓ -->
+<title>文章标题 · zhshy</title>
+<meta name="description" content="一句话摘要，出现在搜索结果里。">
+<meta name="author" content="zhshy">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="zhshy">
+<meta property="og:title" content="文章标题">
+<meta property="og:description" content="一句话摘要。">
+<meta property="og:url" content="https://zhshy-chi.github.io/writeups/文件短名.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+})();
+</script>
+</head>
+<!-- ↓ data-slug 必须和 writeups.js 里的 slug 一致，上一篇/下一篇才能对上 ↓ -->
+<body data-page="article" data-slug="替换成slug">
+<a class="skip-link" href="#main">跳到正文</a>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="../index.html" aria-label="zhshy 首页">
+      <span class="brand-mark">~/</span><span class="brand-text">zhshy</span>
+    </a>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="../index.html">首页</a>
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换深色/浅色主题">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/zhshy-chi" target="_blank" rel="noopener" aria-label="GitHub 主页">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg>
+      </a>
+      <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="wrap article">
+
+  <nav class="breadcrumb" aria-label="面包屑">
+    <a href="../index.html">首页</a><span>/</span>
+    <a href="../writeups.html">Writeups</a><span>/</span>
+    <span class="current">Web</span>
+  </nav>
+
+  <header class="article-head">
+    <div class="article-badges">
+      <span class="badge" data-cat="Web">Web</span>
+      <span class="tag">标签一</span>
+      <span class="tag">标签二</span>
+    </div>
+    <h1>文章标题写在这里</h1>
+    <p class="article-meta">
+      <time datetime="2026-01-01">2026-01-01</time>
+      <span class="dot-sep">·</span>
+      <span>约 10 分钟</span>
+      <span class="dot-sep">·</span>
+      <span>比赛或靶机名</span>
+    </p>
+    <p class="article-lead">
+      两到三行的导语：这道题是什么、难在哪、最后用什么思路解决的。
+    </p>
+  </header>
+
+  <div class="article-layout">
+    <div class="prose" id="prose">
+
+      <h2>题目信息</h2>
+      <table>
+        <tbody>
+          <tr><th>平台</th><td>比赛 / 靶机名</td></tr>
+          <tr><th>类型</th><td>方向</td></tr>
+          <tr><th>知识点</th><td>用逗号分隔</td></tr>
+        </tbody>
+      </table>
+
+      <h2>信息收集</h2>
+      <p>这一段写你看到了什么：页面、响应头、目录、端口、二进制保护。</p>
+
+      <h2>漏洞分析</h2>
+      <p>写清楚为什么这里有问题，而不只是「这里能打」。</p>
+      <pre><code class="language-bash">echo "代码块会自动加语言标签和复制按钮"</code></pre>
+
+      <h2>利用过程</h2>
+      <p>按步骤写，关键 payload 用代码块。</p>
+
+      <h2>踩坑 / 复盘</h2>
+      <ul>
+        <li>走过的弯路</li>
+        <li>最后为什么选了这个解法</li>
+      </ul>
+
+      <h2>防御建议</h2>
+      <p>从防守方角度写两句，这道题会让你看起来更专业。</p>
+
+    </div>
+
+    <aside class="toc" id="toc" aria-label="文章目录">
+      <p class="toc-title">目录</p>
+      <nav id="toc-nav"></nav>
+    </aside>
+  </div>
+
+  <nav class="pager" id="pager" aria-label="上一篇与下一篇"></nav>
+  <p class="back-link"><a href="../writeups.html">← 返回全部 Writeups</a></p>
+
+</article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>© <span id="year">2026</span> zhshy · 本站内容仅供学习交流，请勿用于未授权测试</p>
+    <p class="footer-links">
+      <a href="../writeups.html">Writeups</a>
+      <a href="../about.html">关于</a>
+      <a href="https://github.com/zhshy-chi/zhshy-chi.github.io" target="_blank" rel="noopener">源码</a>
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/writeups.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/article.js"></script>
+</body>
+</html>
